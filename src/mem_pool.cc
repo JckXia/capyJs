@@ -69,6 +69,7 @@ void MemPool<T>::release(T* ptr) {
     assert(slot->in_use && "Double free detected!");
     if(slot == free_list_head) {
         slot->in_use = false;
+        memset(&slot->data,0,sizeof(T));
         return;
     }
 
@@ -88,6 +89,7 @@ void MemPool<T>::release(T* ptr) {
     slot->prev = SIZE_MAX;
     free_list_head->prev = slot->id;
     slot->next = free_list_head->id;
+    memset(&slot->data,0,sizeof(T));
     slot->in_use = false;
     free_list_head = slot;
     in_use_count_ -= 1;

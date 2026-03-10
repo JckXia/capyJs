@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstdint>
 #include <cassert>
+#include <cstring>
 // NOTE: This mem pool implementation is NOT threadsafe
 //  -> It's sufficient for use cases like ours, where the server is a single threaded program relying on
 //     kernel level I/O notification
