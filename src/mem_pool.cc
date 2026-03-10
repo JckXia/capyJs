@@ -112,6 +112,16 @@ void MemPool<T>::dump_state() const{
 }
 
 template<typename T>
+void MemPool<T>::dump_raw_state() const{
+    std::cout<<"Max Capacity: "<< capacity_ <<" total in use: "<< in_use_count_<<std::endl;
+    std::cout<<"Free List Head "<< *free_list_head << " Free List Tail " << *free_list_tail << std::endl;
+    std::cout<<"Data Dump" << std::endl;
+    for(int i =0;i<capacity_;i++) {
+        std::cout<< slots_[i] << std::endl;
+    }
+}
+
+template<typename T>
 size_t MemPool<T>::in_use_count() const {
     return in_use_count_;
 }
@@ -144,15 +154,15 @@ int main() {
  
     MemPool<Point>* pool = new MemPool<Point>(5);
     Point * obj =  pool->acquire();
-    pool->release(obj);
+    // pool->release(obj);
 
-    auto v = pool->acquire();
-    pool->release(v);
-    // pool->acquire();
-    // pool->acquire();
-    // pool->acquire();
-    // pool->acquire();
-    pool->dump_state();
+    // auto v = pool->acquire();
+    // pool->release(v);
+    pool->acquire();
+    pool->acquire();
+    pool->acquire();
+    pool->acquire();
+    pool->dump_raw_state();
  
  
     delete pool;

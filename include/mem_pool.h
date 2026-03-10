@@ -17,7 +17,8 @@ class MemPool {
         void release(T *ptr);
 
         void dump_state() const;
-
+        void dump_raw_state() const;
+        
         size_t in_use_count() const;
         size_t capacity() const;
 
