@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <iostream>
 #include <cstdint>
+#include <cassert>
 // NOTE: This mem pool implementation is NOT threadsafe
 //  -> It's sufficient for use cases like ours, where the server is a single threaded program relying on
 //     kernel level I/O notification
@@ -22,7 +23,7 @@ class MemPool {
         bool is_exhausted() const;
     private:
         struct Slot {
-            size_t id;
+            size_t id;  // TODO: Can be remoed to save on memory
             T data;
             size_t prev;
             size_t next;

@@ -37,8 +37,8 @@ T* MemPool<T>::acquire() {
     free_list_head->in_use = true;
     
     // Get the current head's id and next node index
-    auto id = free_list_head->id;
-    auto next_node_idx = free_list_head->next;
+    size_t id = free_list_head->id;
+    size_t next_node_idx = free_list_head->next;
     
     // set current head's next to -1, reattach prev to tail
     free_list_head->next = SIZE_MAX;
@@ -57,7 +57,40 @@ T* MemPool<T>::acquire() {
 
 template<typename T>
 void MemPool<T>::release(T* ptr) {
+    if(ptr == nullptr) {
+        return;
+    }
+    // size_t id = ptr->id;
+    // Slot* object = slots_[id];
+    Slot* slot = reinterpret_cast<Slot*>(
+        reinterpret_cast<char*>(ptr) - offsetof(Slot, data)
+    );
 
+    assert(slot->in_use && "Double free detected!");
+    if(slot == free_list_head) {
+        slot->in_use = false;
+        return;
+    }
+
+    if(slot->next != SIZE_MAX) {
+        Slot* prevSlot = &slots_[slot->prev];
+        Slot* afterSlot = &slots_[slot->next];
+        prevSlot->next = afterSlot->id;
+        afterSlot->prev = prevSlot->id;
+    } else {
+        // Will be the tail:
+        Slot * prevSlot = &slots_[slot->prev];
+        free_list_tail = prevSlot;
+        prevSlot->next = SIZE_MAX;
+    }
+
+    // // Operation #2: append it to head of fre list
+    slot->prev = SIZE_MAX;
+    free_list_head->prev = slot->id;
+    slot->next = free_list_head->id;
+    slot->in_use = false;
+    free_list_head = slot;
+    in_use_count_ -= 1;
 }
 
 template<typename T>
@@ -78,17 +111,17 @@ void MemPool<T>::dump_state() const{
 
 template<typename T>
 size_t MemPool<T>::in_use_count() const {
-    return 0;
+    return in_use_count_;
 }
 
 template<typename T>
 size_t MemPool<T>::capacity()  const{
-    return 0;
+    return capacity_;
 }
 
 template<typename T>
 bool MemPool<T>::is_exhausted() const {
-    return true;
+    return in_use_count_ == capacity_;
 }
 
 
@@ -108,8 +141,11 @@ int main() {
     std::cout<<"Hello World" << std::endl;
  
     MemPool<Point>* pool = new MemPool<Point>(5);
-    pool->acquire();
-    // pool->acquire();
+    Point * obj =  pool->acquire();
+    pool->release(obj);
+
+    auto v = pool->acquire();
+    pool->release(v);
     // pool->acquire();
     // pool->acquire();
     // pool->acquire();
