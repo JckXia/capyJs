@@ -23,6 +23,8 @@ class MemPool {
         size_t in_use_count() const;
         size_t capacity() const;
 
+        void verify_no_leaks() const; 
+
         bool is_exhausted() const;
     private:
         struct Slot {
@@ -66,7 +68,18 @@ MemPool<T>::MemPool(size_t capacity): capacity_(capacity), in_use_count_(0) {
     free_list_tail = &slots_[capacity - 1];
 }
 
- 
+template<typename T>
+void MemPool<T>::verify_no_leaks() const {    
+    for(int i =0;i<capacity_;i++) {
+        if(slots_[i].in_use == true) {
+            std::cout<<"[ERROR] slot " << slots_[i] << " Has not been free'd! " <<std::endl;
+            return;
+        }
+        assert(slots_[i].in_use == false && "All memory should be free'd!");
+        //std::cout<< slots_[i] << std::endl;
+    }
+    std::cout<<"Success! No leak found \n";
+}
 
 template<typename T>
 T* MemPool<T>::acquire() {
