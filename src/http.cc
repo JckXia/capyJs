@@ -14,23 +14,30 @@ using namespace std;
     Note, there's a single fd that maps to the server during the life time of the server.
 
 */
-
 /*
     What's the point of the N_BACKLOG?
         -> It's a traffic shaping mechanism to handle bursty traffic
         -> essentially leaky bucket as a queue technique! Except the drain rate is how fast the server can process the request
 */
 #define N_BACKLOG 64
+#define MEM_POOL_SIZE 10
+
+// Keep an eye on this to ensure it doesnt grow too big
+struct ClientState {
+    uv_tcp_t socket;
+    uv_write_t write_handle;
+    
+    MemPool<ClientState>* mem_pool; // self ref fror cleanup
+};
 
 struct ServerContext {
-    MemPool<uv_tcp_t>* mem_pool;
+    MemPool<ClientState>* mem_pool;
 };
 
 void on_client_closed(uv_handle_t* handle) {
-    uv_tcp_t* client = (uv_tcp_t*)handle;
-    MemPool<uv_tcp_t>* pool = (MemPool<uv_tcp_t>*) client->data;
-    pool->release(client);    
-
+    uv_tcp_t* client_sock = (uv_tcp_t*)handle;
+    ClientState* client = (ClientState*) client_sock->data;
+    client->mem_pool->release(client); 
 }
 
 void on_peer_connected(uv_stream_t* server_stream, int status) {
@@ -40,24 +47,27 @@ void on_peer_connected(uv_stream_t* server_stream, int status) {
     int rc;
     ServerContext* ctx = (ServerContext*) server_stream->data;
 
-    MemPool<uv_tcp_t>* pool = ctx->mem_pool;
+    MemPool<ClientState>* pool = ctx->mem_pool;
 
-    uv_tcp_t* client = pool->acquire();
-    client->data = pool;
-    if ((rc = uv_tcp_init(uv_default_loop(), client)) < 0) {    // create an fd mapped to the client for the kernel
+    ClientState *client = pool->acquire();  //TODO: Abstract into initClient function
+    uv_tcp_t* client_sock = &client->socket;
+    client->mem_pool = pool;
+    // uv_tcp_t* client = pool->acquire();
+    client_sock->data = client;
+    if ((rc = uv_tcp_init(uv_default_loop(), client_sock)) < 0) {    // create an fd mapped to the client for the kernel
         //die("uv_tcp_init failed: %s", uv_strerror(rc));
         return;
     }
 
-    if(uv_accept(server_stream, (uv_stream_t*) client) == 0) {  // start listening to incoming requests
+    if(uv_accept(server_stream, (uv_stream_t*) client_sock) == 0) {  // start listening to incoming requests
         struct sockaddr_storage peername;
         int namelen = sizeof(peername);
-        if ((rc = uv_tcp_getpeername(client, (struct sockaddr*)&peername, &namelen)) <0){
+        if ((rc = uv_tcp_getpeername(client_sock, (struct sockaddr*)&peername, &namelen)) <0){
             return;
         }   
         cout<<"Client connected!"<<endl;
         
-        uv_close((uv_handle_t*)client, on_client_closed);
+        uv_close((uv_handle_t*)client_sock, on_client_closed);
     }
 }
 
@@ -83,9 +93,9 @@ int main() {
     uv_signal_start(&sig, on_signal, SIGINT);
 
     ServerContext ctx;
-    MemPool<uv_tcp_t> mem_pool(10);
+    MemPool<ClientState>* memory_pool = new MemPool<ClientState>(MEM_POOL_SIZE);  // Alloc'd on the HEAP bc this'd overflow in resource constrainted environments
 
-    ctx.mem_pool = &mem_pool;
+    ctx.mem_pool = memory_pool;
 
     uv_tcp_t server_stream;
     server_stream.data = &ctx;
@@ -105,9 +115,10 @@ int main() {
     }
     cout<<"Serving on port "<< portnum << endl;
     uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-    mem_pool.dump_raw_state();
-
+ 
+    memory_pool->dump_raw_state();
     uv_loop_close(uv_default_loop());
     uv_library_shutdown();
+    delete memory_pool;
     return 0;
 }
