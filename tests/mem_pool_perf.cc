@@ -4,6 +4,7 @@
 #include <vector>
 #include <chrono>
 #include "mem_pool.h"
+#include <iomanip>
 using namespace std::chrono;
 
 struct TestStruct {
@@ -34,7 +35,7 @@ void bench_pool(size_t pool_size, size_t num_ops) {
 
     std::cout << "  total:     " << ns << "ns\n";
     std::cout << "  ns/op:     " << ns / (double)num_ops << "ns\n";
-    std::cout << "  ops/sec:   " << (num_ops / (double)ns) * 1e9 << "\n";
+     std::cout << "  ops/sec:   " << std::fixed << std::setprecision(0) << (num_ops / (double)ns) * 1e9 << "\n";
 }
 
 // ─── MALLOC BENCH ──────────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ void bench_malloc(size_t num_ops) {
 
     std::cout << "  total:     " << ns << "ns\n";
     std::cout << "  ns/op:     " << ns / (double)num_ops << "ns\n";
-    std::cout << "  ops/sec:   " << (num_ops / (double)ns) * 1e9 << "\n";
+    std::cout << "  ops/sec:   " << std::fixed << std::setprecision(0) << (num_ops / (double)ns) * 1e9 << "\n";
 }
 
 // ─── FRAGMENTATION BENCH ───────────────────────────────────────────────────
@@ -97,7 +98,7 @@ void bench_pool_fragmented(size_t pool_size, size_t num_ops) {
 
     std::cout << "  total:     " << ns << "ns\n";
     std::cout << "  ns/op:     " << ns / (double)num_ops << "ns\n";
-    std::cout << "  ops/sec:   " << (num_ops / (double)ns) * 1e9 << "\n";
+    std::cout << "  ops/sec:   " << std::fixed << std::setprecision(0) << (num_ops / (double)ns) * 1e9 << "\n";
 }
 
 void bench_malloc_fragmented(size_t num_ops) {
