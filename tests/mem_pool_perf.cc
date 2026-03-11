@@ -4,18 +4,18 @@
 #include <vector>
 #include <chrono>
 #include "mem_pool.h"
-using namespace std;
-struct MemPoolTest {
-    int x;
-    int y;
-    MemPoolTest(): x(0), y(0) {}
-};
-
 using namespace std::chrono;
 
-void bench_acquire_release(size_t pool_size, size_t num_ops) {
-    MemPool<int> pool(pool_size);
-    std::vector<int*> live;
+struct TestStruct {
+    int fd;
+    char buf[64];
+    size_t bytes_read;
+};
+
+// ─── POOL BENCH ────────────────────────────────────────────────────────────
+void bench_pool(size_t pool_size, size_t num_ops) {
+    MemPool<TestStruct> pool(pool_size);
+    std::vector<TestStruct*> live;
     live.reserve(pool_size);
 
     auto start = high_resolution_clock::now();
@@ -32,14 +32,120 @@ void bench_acquire_release(size_t pool_size, size_t num_ops) {
     auto end = high_resolution_clock::now();
     auto ns  = duration_cast<nanoseconds>(end - start).count();
 
-    std::cout << "=== BENCH: pool_size=" << pool_size 
-              << " ops=" << num_ops << " ===\n";
-    std::cout << "total:      " << ns << "ns\n";
-    std::cout << "ns per op:  " << ns / (double)num_ops << "ns\n";
-    std::cout << "ops/sec:    " << (num_ops / (double)ns) * 1e9 << "\n";
+    std::cout << "  total:     " << ns << "ns\n";
+    std::cout << "  ns/op:     " << ns / (double)num_ops << "ns\n";
+    std::cout << "  ops/sec:   " << (num_ops / (double)ns) * 1e9 << "\n";
 }
+
+// ─── MALLOC BENCH ──────────────────────────────────────────────────────────
+void bench_malloc(size_t num_ops) {
+    std::vector<TestStruct*> live;
+    live.reserve(10000);
+
+    auto start = high_resolution_clock::now();
+
+    for (size_t i = 0; i < num_ops; i++) {
+        if (live.empty() || (live.size() < 10000 && i % 2 == 0)) {
+            live.push_back((TestStruct*)malloc(sizeof(TestStruct)));
+        } else {
+            free(live.back());
+            live.pop_back();
+        }
+    }
+
+    auto end = high_resolution_clock::now();
+    auto ns  = duration_cast<nanoseconds>(end - start).count();
+
+    // free anything still live
+    for (auto p : live) free(p);
+
+    std::cout << "  total:     " << ns << "ns\n";
+    std::cout << "  ns/op:     " << ns / (double)num_ops << "ns\n";
+    std::cout << "  ops/sec:   " << (num_ops / (double)ns) * 1e9 << "\n";
+}
+
+// ─── FRAGMENTATION BENCH ───────────────────────────────────────────────────
+// simulates realistic server pattern:
+// alloc many, free every other, alloc again
+// this is where malloc degrades and pool stays flat
+void bench_pool_fragmented(size_t pool_size, size_t num_ops) {
+    MemPool<TestStruct> pool(pool_size);
+    std::vector<TestStruct*> live;
+    live.reserve(pool_size);
+
+    // phase 1: fill pool halfway
+    for (size_t i = 0; i < pool_size / 2; i++) {
+        live.push_back(pool.acquire( ));
+    }
+
+    auto start = high_resolution_clock::now();
+
+    // phase 2: random acquire/release pattern (fragmented state)
+    for (size_t i = 0; i < num_ops; i++) {
+        if (i % 3 == 0 && !pool.is_exhausted()) {
+            live.push_back(pool.acquire( ));
+        } else if (!live.empty()) {
+            // release from MIDDLE of live list — worst case for malloc
+            size_t idx = live.size() / 2;
+            pool.release(live[idx]);
+            live.erase(live.begin() + idx);
+        }
+    }
+
+    auto end = high_resolution_clock::now();
+    auto ns  = duration_cast<nanoseconds>(end - start).count();
+
+    std::cout << "  total:     " << ns << "ns\n";
+    std::cout << "  ns/op:     " << ns / (double)num_ops << "ns\n";
+    std::cout << "  ops/sec:   " << (num_ops / (double)ns) * 1e9 << "\n";
+}
+
+void bench_malloc_fragmented(size_t num_ops) {
+    std::vector<TestStruct*> live;
+    live.reserve(10000);
+
+    // phase 1: fill halfway
+    for (size_t i = 0; i < 5000; i++) {
+        live.push_back((TestStruct*)malloc(sizeof(TestStruct)));
+    }
+
+    auto start = high_resolution_clock::now();
+
+    // phase 2: same fragmented pattern
+    for (size_t i = 0; i < num_ops; i++) {
+        if (i % 3 == 0 && live.size() < 10000) {
+            live.push_back((TestStruct*)malloc(sizeof(TestStruct)));
+        } else if (!live.empty()) {
+            size_t idx = live.size() / 2;
+            free(live[idx]);
+            live.erase(live.begin() + idx);
+        }
+    }
+
+    auto end = high_resolution_clock::now();
+    auto ns  = duration_cast<nanoseconds>(end - start).count();
+
+    for (auto p : live) free(p);
+
+    std::cout << "  total:     " << ns << "ns\n";
+    std::cout << "  ns/op:     " << ns / (double)num_ops << "ns\n";
+    std::cout << "  ops/sec:   " << (num_ops / (double)ns) * 1e9 << "\n";
+}
+
 int main() {
-    bench_acquire_release(10,    100000);   // tiny pool
-    bench_acquire_release(1000,  100000);   // medium pool  
-    bench_acquire_release(10000, 500000);   // C10K pool
+    const size_t OPS = 500000;
+
+    std::cout << "\n=== SEQUENTIAL ACQUIRE/RELEASE (pool_size=10000) ===\n";
+    std::cout << "[POOL]\n";
+    bench_pool(10000, OPS);
+    std::cout << "[MALLOC]\n";
+    bench_malloc(OPS);
+
+    std::cout << "\n=== FRAGMENTED PATTERN (realistic server load) ===\n";
+    std::cout << "[POOL]\n";
+    bench_pool_fragmented(10000, OPS);
+    std::cout << "[MALLOC]\n";
+    bench_malloc_fragmented(OPS);
+
+    return 0;
 }
