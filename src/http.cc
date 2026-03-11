@@ -1,5 +1,6 @@
 #include <iostream>
 #include "uv.h"
+#include "mem_pool.h"
 using namespace std;
 /*
     Libuv's uv_run:
@@ -21,9 +22,15 @@ using namespace std;
 */
 #define N_BACKLOG 64
 
+struct ServerContext {
+    MemPool<uv_tcp_t>* mem_pool;
+};
+
 void on_client_closed(uv_handle_t* handle) {
     uv_tcp_t* client = (uv_tcp_t*)handle;
-    free(client);
+    MemPool<uv_tcp_t>* pool = (MemPool<uv_tcp_t>*) client->data;
+    pool->release(client);    
+
 }
 
 void on_peer_connected(uv_stream_t* server_stream, int status) {
@@ -31,7 +38,12 @@ void on_peer_connected(uv_stream_t* server_stream, int status) {
         return;
     }
     int rc;
-    uv_tcp_t* client = (uv_tcp_t*)malloc(sizeof(*client));  // Initialize an client structure on the heap
+    ServerContext* ctx = (ServerContext*) server_stream->data;
+
+    MemPool<uv_tcp_t>* pool = ctx->mem_pool;
+
+    uv_tcp_t* client = pool->acquire();
+    client->data = pool;
     if ((rc = uv_tcp_init(uv_default_loop(), client)) < 0) {    // create an fd mapped to the client for the kernel
         //die("uv_tcp_init failed: %s", uv_strerror(rc));
         return;
@@ -44,9 +56,17 @@ void on_peer_connected(uv_stream_t* server_stream, int status) {
             return;
         }   
         cout<<"Client connected!"<<endl;
+        
         uv_close((uv_handle_t*)client, on_client_closed);
     }
 }
+
+void on_signal(uv_signal_t* handle, int signum) {
+    uv_signal_stop(handle);
+    uv_close((uv_handle_t*)handle, NULL);
+    uv_stop(uv_default_loop());
+}
+ 
 int main() {
     setvbuf(stdout, NULL, _IONBF, 0);
     int portnum = 9090;
@@ -57,8 +77,19 @@ int main() {
         cout<<"uv_ip4_addr_init failed" << endl;
         return -1;
     }
- 
+    
+    uv_signal_t sig;
+    uv_signal_init(uv_default_loop(), &sig);
+    uv_signal_start(&sig, on_signal, SIGINT);
+
+    ServerContext ctx;
+    MemPool<uv_tcp_t> mem_pool(10);
+
+    ctx.mem_pool = &mem_pool;
+
     uv_tcp_t server_stream;
+    server_stream.data = &ctx;
+
     if ((rc = uv_tcp_init(uv_default_loop(), &server_stream)) < 0) {  // This is where the fd is created. Kernel has no idea what IP/Port is belongs to
         cout << "uv_tcp_init_failed "<< uv_strerror(rc) << endl;
         return -1;
@@ -70,10 +101,13 @@ int main() {
     }
 
     if ((rc = uv_listen((uv_stream_t*)&server_stream, N_BACKLOG,  on_peer_connected)) < 0) { // Activates socket for incoming connections. Kernel starts doing TCP handshakes and queueing them
-        cout <<"uv listen failed"<< endl; 
-                        //("uv_listen failed: %s", uv_strerror(rc));
+        cout <<"uv listen failed"<< endl;
     }
     cout<<"Serving on port "<< portnum << endl;
     uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-    return uv_loop_close(uv_default_loop());
+    mem_pool.dump_raw_state();
+
+    uv_loop_close(uv_default_loop());
+    uv_library_shutdown();
+    return 0;
 }
