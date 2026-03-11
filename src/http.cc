@@ -21,13 +21,20 @@ using namespace std;
 */
 #define N_BACKLOG 64
 #define MEM_POOL_SIZE 10
-
+const char* msg = 
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/plain\r\n"
+    "Content-Length: 25\r\n"
+    "Connection: close\r\n"
+    "\r\n"
+    "hello from capyJs server\n";
 // Keep an eye on this to ensure it doesnt grow too big
 struct ClientState {
     uv_tcp_t socket;
     uv_write_t write_handle;
     
     MemPool<ClientState>* mem_pool; // self ref fror cleanup
+    char read_buffer[64];
 };
 
 struct ServerContext {
@@ -40,6 +47,66 @@ void on_client_closed(uv_handle_t* handle) {
     client->mem_pool->release(client); 
 }
 
+// After acquire() succeeded
+void init_client_state(ClientState * client_state, MemPool<ClientState>* pool) {
+    uv_tcp_t* client_sock = &client_state->socket;
+    client_state->mem_pool = pool;
+}
+
+void init_client_socket(ClientState* client_state) {
+    uv_tcp_t* client_sock = &client_state->socket;
+    client_sock->data = client_state;
+    int rc;
+    if ((rc = uv_tcp_init(uv_default_loop(), client_sock)) < 0) {    // create an fd mapped to the client for the kernel
+        //die("uv_tcp_init failed: %s", uv_strerror(rc));
+        return;
+    }
+}
+
+void on_write(uv_write_t* req, int status) {
+    if(status) {
+        std::cout<<"ERROR! "<< uv_strerror(status) << std::endl;
+    } else {
+           std::cout<<"Write completed \n";
+    }
+    ClientState* client_state = (ClientState*) req->data;
+
+    auto client = &client_state->socket;
+  //  uv_close((uv_handle_t*)&client_state->socket, on_client_closed); 
+    if (!uv_is_closing((uv_handle_t*)client)) {
+        // Graceful shutdown: sends FIN to the client
+        uv_shutdown_t* shutdown_req = (uv_shutdown_t*)malloc(sizeof(uv_shutdown_t));
+        uv_shutdown(shutdown_req, (uv_stream_t*) client, [](uv_shutdown_t* req, int status) {
+            // Once the shutdown (FIN) is acknowledged, we kill the handle
+            uv_close((uv_handle_t*)req->handle, on_client_closed);
+            free(req);
+        });
+    }
+}
+
+void on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf) {
+    if (nread > 0){
+        // We got data!
+    }
+
+    if (nread < 0){
+        // nread < 0 means client closed the connection (UV_EOF)
+        if(nread != UV_EOF) {
+
+        } 
+        if (!uv_is_closing((uv_handle_t*)client)) {
+            uv_close((uv_handle_t*)client, on_client_closed);
+        }
+    }
+}
+
+void alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t *buf) {
+    ClientState* clientState = (ClientState*) handle->data;
+    buf->base = clientState->read_buffer;
+    buf->len = 64;
+}
+
+
 void on_peer_connected(uv_stream_t* server_stream, int status) {
     if (status < 0) {
         return;
@@ -49,25 +116,24 @@ void on_peer_connected(uv_stream_t* server_stream, int status) {
 
     MemPool<ClientState>* pool = ctx->mem_pool;
 
-    ClientState *client = pool->acquire();  //TODO: Abstract into initClient function
-    uv_tcp_t* client_sock = &client->socket;
-    client->mem_pool = pool;
-    // uv_tcp_t* client = pool->acquire();
-    client_sock->data = client;
-    if ((rc = uv_tcp_init(uv_default_loop(), client_sock)) < 0) {    // create an fd mapped to the client for the kernel
-        //die("uv_tcp_init failed: %s", uv_strerror(rc));
-        return;
-    }
+    ClientState *client = pool->acquire();  //TODO: Add an check to guard against NULLPTR/memroy pool full
+    init_client_state(client, pool);
+    init_client_socket(client);
 
-    if(uv_accept(server_stream, (uv_stream_t*) client_sock) == 0) {  // start listening to incoming requests
+    if(uv_accept(server_stream, (uv_stream_t*) &client->socket) == 0) {  // start listening to incoming requests
         struct sockaddr_storage peername;
         int namelen = sizeof(peername);
-        if ((rc = uv_tcp_getpeername(client_sock, (struct sockaddr*)&peername, &namelen)) <0){
+        if ((rc = uv_tcp_getpeername(&client->socket, (struct sockaddr*)&peername, &namelen)) <0){
             return;
         }   
-        cout<<"Client connected!"<<endl;
-        
-        uv_close((uv_handle_t*)client_sock, on_client_closed);
+
+        cout<<"Client HAS indeed connected!"<<endl;
+        int r = uv_read_start((uv_stream_t*)&client->socket, alloc_buffer, on_read);
+        uv_buf_t buf = uv_buf_init((char*)msg, strlen(msg));
+        uv_write_t* write_handle = &client->write_handle;
+        write_handle->data = client;
+        uv_write(write_handle, (uv_stream_t*) &client->socket, &buf, 1, on_write);
+       
     }
 }
 
