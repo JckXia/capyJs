@@ -20,7 +20,7 @@ using namespace std;
         -> essentially leaky bucket as a queue technique! Except the drain rate is how fast the server can process the request
 */
 #define N_BACKLOG 10
-#define MEM_POOL_SIZE 12000
+#define MEM_POOL_SIZE 10000
 const char* msg = 
     "HTTP/1.1 200 OK\r\n"
     "Content-Type: text/plain\r\n"
@@ -39,8 +39,16 @@ struct ClientState {
 };
 
 struct ServerContext {
+    MemPool<uv_tcp_t>* emergency_handles;
     MemPool<ClientState>* mem_pool;
 };
+
+
+void on_client_closed_emergency(uv_handle_t* handle) {
+    uv_tcp_t* client_sock = (uv_tcp_t*)handle;
+    ServerContext * ctx = (ServerContext*)client_sock->data;
+    ctx->emergency_handles->release(client_sock);
+}
 
 void on_client_closed(uv_handle_t* handle) {
     uv_tcp_t* client_sock = (uv_tcp_t*)handle;
@@ -48,7 +56,6 @@ void on_client_closed(uv_handle_t* handle) {
     client->mem_pool->release(client); 
 }
 
-// After acquire() succeeded
 void init_client_state(ClientState * client_state, MemPool<ClientState>* pool) {
     uv_tcp_t* client_sock = &client_state->socket;
     client_state->mem_pool = pool;
@@ -64,7 +71,10 @@ void init_client_socket(ClientState* client_state) {
         return;
     }
 }
+// ########################################################### Above are helper functions ###################### //
 
+
+// ######################################################## Libuv life cycle callbacks ######## //
 void on_write(uv_write_t* req, int status) {
     if(status) {
         std::cout<<"ERROR! "<< uv_strerror(status) << std::endl;
@@ -73,19 +83,7 @@ void on_write(uv_write_t* req, int status) {
     }
     ClientState* client_state = (ClientState*) req->data;
     client_state->write_in_flight = false;
-    // ClientState* client_state = (ClientState*) req->data;
-
-    // auto client = &client_state->socket;
-  //  uv_close((uv_handle_t*)&client_state->socket, on_client_closed); 
-    // if (!uv_is_closing((uv_handle_t*)client)) {
-    //     // Graceful shutdown: sends FIN to the client
-    //     uv_shutdown_t* shutdown_req = (uv_shutdown_t*)malloc(sizeof(uv_shutdown_t));
-    //     uv_shutdown(shutdown_req, (uv_stream_t*) client, [](uv_shutdown_t* req, int status) {
-    //         // Once the shutdown (FIN) is acknowledged, we kill the handle
-    //         uv_close((uv_handle_t*)req->handle, on_client_closed);
-    //         free(req);
-    //     });
-    // }
+ 
 }
 
 void on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf) {
@@ -99,8 +97,11 @@ void on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf) {
         uv_buf_t buf = uv_buf_init((char*)msg, strlen(msg));
         uv_write_t* write_handle = &client_state->write_handle;
         write_handle->data = client_state;
-        // uv_write(write_handle, (uv_stream_t*) &client_state->socket, &buf, 1, on_write);
-        uv_write(write_handle, client, &buf, 1, on_write);
+        int rc;
+        if (rc = uv_write(write_handle, client, &buf, 1, on_write) < 0) {
+            std::cout<<"Write to socket failed! " << uv_strerror(rc) << std::endl;
+        }
+        // uv_write(write_handle, client, &buf, 1, on_write);
         return;
     }
 
@@ -133,19 +134,22 @@ void on_peer_connected(uv_stream_t* server_stream, int status) {
 
     ClientState *client = pool->acquire();  //TODO: More graceful shutdown handling
     if(client == nullptr) {
-        std::cerr<<"Connection pool exhausted!\n";
+        std::cerr<<"Connection pool is exhausted!\n";
         // Pool exhausted — accept and immediately close to prevent backlog buildup
         // uv_tcp_t temp_socket;
-        // uv_tcp_init(uv_default_loop(), &temp_socket);
-        // if (uv_accept(server_stream, (uv_stream_t*) &temp_socket) == 0) {
-         
-        //     if (!uv_is_closing((uv_handle_t*)&temp_socket)) {
-        //     uv_close((uv_handle_t*)&temp_socket, NULL);
-        //   }
-        // }
+        uv_tcp_t* temp_socket = ctx->emergency_handles->acquire();
+        temp_socket->data = ctx;
+        int rc = uv_tcp_init(uv_default_loop(), temp_socket); // Needs to let libuv know about socket
+        std::cout<< rc << std::endl;
+        if(uv_accept(server_stream, (uv_stream_t*) temp_socket) == 0) {
+            uv_close((uv_handle_t*)temp_socket, on_client_closed_emergency);
+        } else {
+            ctx->emergency_handles->release(temp_socket);
+        }
+ 
         return;
     }
-    // ::cout<< pool->in_use_count() << std::endl;
+ 
     init_client_state(client, pool);
     init_client_socket(client);
 
@@ -156,14 +160,7 @@ void on_peer_connected(uv_stream_t* server_stream, int status) {
             std::cout<< "Get peer name failed "<< uv_strerror(rc) << std::endl;
             return;
         }   
-
-   //     cout<<"Client HAS indeed connected!"<<endl;
         int r = uv_read_start((uv_stream_t*)&client->socket, alloc_buffer, on_read);
-        // uv_buf_t buf = uv_buf_init((char*)msg, strlen(msg));
-        // uv_write_t* write_handle = &client->write_handle;
-        // write_handle->data = client;
-        // uv_write(write_handle, (uv_stream_t*) &client->socket, &buf, 1, on_write);
-       
     }
 }
 
@@ -190,7 +187,8 @@ int main() {
 
     ServerContext ctx;
     MemPool<ClientState>* memory_pool = new MemPool<ClientState>(MEM_POOL_SIZE);  // Alloc'd on the HEAP bc this'd overflow in resource constrainted environments
-
+    MemPool<uv_tcp_t> emergency_handles(16);
+    ctx.emergency_handles = &emergency_handles;
     ctx.mem_pool = memory_pool;
 
     uv_tcp_t server_stream;
@@ -200,7 +198,6 @@ int main() {
         cout << "uv_tcp_init_failed "<< uv_strerror(rc) << endl;
         return -1;
     }
-
 
     if ((rc = uv_tcp_bind(&server_stream, (const struct sockaddr*)&server_address, 0)) <0) { // The fd gets married to associate to address. So kernel knows trarffic arriving at 0.0.0.0:9090 belongs to this fd
         cout<<"uv_tcp_bind failed" << endl;
