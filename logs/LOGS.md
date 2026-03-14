@@ -9,3 +9,20 @@
 - Instead, we'll allocate a separate buffer pool. (WARNING: watchout for the casts. They'll bite you)
 - Each ClientState should track: StartOfReadBuffer, nLen. (Since the buffers are allocated sequentially)
 - Need to also refactor out the "data" field. It's a mess at the moment
+
+# 3/12/2026:
+#### Completed:
+- Improved error handling around when connection MemPool is exhausted
+
+# 3/16/2026 (LC week goals):
+- Rewrite the memory pool into a simple LIFO queue. Make sure the tests pass.
+- Look into and implement streaming static files back to caller
+
+#  3/23/2026 (Runtime week goals):
+- Revisit and rework the logic around read buffers.
+- Implement backpressure algorithms.
+- Integrate llhttp into server.
+- Abstract out the server into an agnostic interface class for future embedding
+- Design an extensive load test for the server and the memory pool. Export results into diagrams.
+
+
