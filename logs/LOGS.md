@@ -14,8 +14,11 @@
 #### Completed:
 - Improved error handling around when connection MemPool is exhausted
 
+# 3/14/2026:
+#### Completed:
+- Rewrote the memory pool a bit. removed prev pointers. Tests passed!
+
 # 3/16/2026 (LC week goals):
-- Rewrite the memory pool into a simple LIFO queue. Make sure the tests pass.
 - Look into and implement streaming static files back to caller
 
 #  3/23/2026 (Runtime week goals):

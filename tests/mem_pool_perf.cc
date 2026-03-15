@@ -7,10 +7,12 @@
 #include <iomanip>
 using namespace std::chrono;
 
+// 400 + 8 + 2 = 582 BYTES
 struct TestStruct {
-    int fd;
-    char buf[64];
-    size_t bytes_read;
+    char mock_socket[200];
+    char mock_handle[200];
+    char buf[8];
+    bool fd;
 };
 
 // ─── POOL BENCH ────────────────────────────────────────────────────────────
