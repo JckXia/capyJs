@@ -18,9 +18,13 @@
 #### Completed:
 - Rewrote the memory pool a bit. removed prev pointers. Tests passed!
 
+- # 3/15/2026:
+#### Completed:
+- Merged pull requests and pulled in libuv as a dep nodeJs style
+
 # 3/16/2026 (LC week goals):
-- Implement a separate buffer pool for the server
-- Look into and implement streaming static files back to caller, handle back pressure
+- Implement a separate read/write buffer pool for the server component
+- Look into and implement streaming static files back to caller
 
 #  3/23/2026 (Runtime week goals):
 - Integrate llhttp into server.
