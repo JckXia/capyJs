@@ -97,6 +97,7 @@ void test_reclaim_successful() {
 void test_out_of_order_alloc_dealloc() {
 
     MemPool<MemPoolTest> pool(5);
+    std::cout<<"test" << std::endl;
     auto a = pool.acquire();
     auto b = pool.acquire();
     assert(__structAllocSuccessful(a));

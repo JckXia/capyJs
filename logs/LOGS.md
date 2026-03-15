@@ -14,13 +14,15 @@
 #### Completed:
 - Improved error handling around when connection MemPool is exhausted
 
+# 3/14/2026:
+#### Completed:
+- Rewrote the memory pool a bit. removed prev pointers. Tests passed!
+
 # 3/16/2026 (LC week goals):
-- Rewrite the memory pool into a simple LIFO queue. Make sure the tests pass.
-- Look into and implement streaming static files back to caller
+- Implement a separate buffer pool for the server
+- Look into and implement streaming static files back to caller, handle back pressure
 
 #  3/23/2026 (Runtime week goals):
-- Revisit and rework the logic around read buffers.
-- Implement backpressure algorithms.
 - Integrate llhttp into server.
 - Abstract out the server into an agnostic interface class for future embedding
 - Design an extensive load test for the server and the memory pool. Export results into diagrams.
