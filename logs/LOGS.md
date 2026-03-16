@@ -24,7 +24,7 @@
 
 # 3/16/2026 (LC week goals):
 - Implement a separate read/write buffer pool for the server component
-- Look into and implement streaming static files back to caller
+- Implement an server-side cache for static files.
 
 #  3/23/2026 (Runtime week goals):
 - Integrate llhttp into server.
