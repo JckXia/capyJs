@@ -143,6 +143,8 @@ void alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t *buf) {
     if(buffer != nullptr) {
         buf->base = buffer->read_buffer;
         buf->len = 256;
+    } else {
+        std::cout<<"Read buffer exhuasted! \n";
     }
  
 }
