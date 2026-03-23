@@ -14,13 +14,9 @@ using namespace std;
     Note, there's a single fd that maps to the server during the life time of the server.
 
 */
-/*
-    What's the point of the N_BACKLOG?
-        -> It's a traffic shaping mechanism to handle bursty traffic
-        -> essentially leaky bucket as a queue technique! Except the drain rate is how fast the server can process the request
-*/
 #define N_BACKLOG 10
 #define MEM_POOL_SIZE 10000
+#define READ_BUFFER_POOL_SIZE 200
 const char* msg = 
     "HTTP/1.1 200 OK\r\n"
     "Content-Type: text/plain\r\n"
@@ -41,11 +37,19 @@ struct ClientState {
     bool write_in_flight = false;
 };
 
- 
+
+// This struct manages all resources, caches used by the server process
 struct ServerContext {
+ 
     MemPool<uv_tcp_t>* emergency_handles;
     MemPool<ClientState>* mem_pool;
     MemPool<ReadBuffer>* read_buffer_pool;
+    ~ServerContext() {
+        mem_pool->verify_no_leaks(); 
+        read_buffer_pool->verify_no_leaks();
+        delete mem_pool;
+        delete read_buffer_pool;
+    }
 };
 
 
@@ -98,15 +102,15 @@ void print_read_request(const uv_buf_t* buf) {
 
 void on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf) {
     ClientState* client_state = (ClientState*)client->data;
+    client_state->global_read_buffer->release((ReadBuffer*) buf->base);
     if (nread > 0){
         // We got data!
   
        if(client_state->write_in_flight) {
             return;
        }
-        print_read_request(buf);
-        // Release the read buffer
-        client_state->global_read_buffer->release((ReadBuffer*) buf->base);
+      // print_read_request(buf);
+        // client_state->global_read_buffer->release((ReadBuffer*) buf->base);
         client_state->write_in_flight = true;
         uv_buf_t buff = uv_buf_init((char*)msg, strlen(msg));
         uv_write_t* write_handle = &client_state->write_handle;
@@ -119,7 +123,7 @@ void on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf) {
     }
 
     if (nread < 0){
-        client_state->global_read_buffer->release((ReadBuffer*) buf->base);
+        // client_state->global_read_buffer->release((ReadBuffer*) buf->base);
         // nread < 0 means client closed the connection (UV_EOF)
         if(nread != UV_EOF) {
             
@@ -154,7 +158,7 @@ void on_peer_connected(uv_stream_t* server_stream, int status) {
     MemPool<ClientState>* pool = ctx->mem_pool;
     MemPool<ReadBuffer>* read_buffer = ctx->read_buffer_pool;
 
-    ClientState *client = pool->acquire();  //TODO: More graceful shutdown handling
+    ClientState *client = pool->acquire();
     if(client == nullptr) {
         std::cerr<<"Connection pool is exhausted!\n";
         uv_tcp_t* temp_socket = ctx->emergency_handles->acquire();
@@ -190,7 +194,15 @@ void on_signal(uv_signal_t* handle, int signum) {
     uv_close((uv_handle_t*)handle, NULL);
     uv_stop(uv_default_loop());
 }
- 
+
+void init_server_context(ServerContext * ctx) {
+    MemPool<ClientState>* memory_pool = new MemPool<ClientState>(MEM_POOL_SIZE);  // Alloc'd on the HEAP bc this'd overflow in resource constrainted environments
+    MemPool<ReadBuffer>* read_buffer = new MemPool<ReadBuffer>(READ_BUFFER_POOL_SIZE); // 
+    MemPool<uv_tcp_t> emergency_handles(16);
+    ctx->emergency_handles = &emergency_handles;
+    ctx->mem_pool = memory_pool;
+    ctx->read_buffer_pool = read_buffer;
+}
 int main() {
     setvbuf(stdout, NULL, _IONBF, 0);
     int portnum = 9091;
@@ -207,13 +219,8 @@ int main() {
     uv_signal_start(&sig, on_signal, SIGINT);
 
     ServerContext ctx;
-    MemPool<ClientState>* memory_pool = new MemPool<ClientState>(MEM_POOL_SIZE);  // Alloc'd on the HEAP bc this'd overflow in resource constrainted environments
-    MemPool<ReadBuffer>* read_buffer = new MemPool<ReadBuffer>(200); // 
-    MemPool<uv_tcp_t> emergency_handles(16);
-    ctx.emergency_handles = &emergency_handles;
-    ctx.mem_pool = memory_pool;
-    ctx.read_buffer_pool = read_buffer;
-
+    init_server_context(&ctx);
+ 
     uv_tcp_t server_stream;
     server_stream.data = &ctx;
 
@@ -233,13 +240,8 @@ int main() {
     cout<<"Serving on port Test "<< portnum << endl;
     uv_run(uv_default_loop(), UV_RUN_DEFAULT);
  
-
-    memory_pool->verify_no_leaks(); 
-    read_buffer->verify_no_leaks();
+ 
     uv_loop_close(uv_default_loop());
     uv_library_shutdown();
-
-    delete memory_pool;
-    delete read_buffer;
     return 0;
 }
