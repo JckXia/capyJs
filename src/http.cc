@@ -38,7 +38,6 @@ struct ClientState {
     
     MemPool<ClientState>* mem_pool; // self ref fror cleanup
     MemPool<ReadBuffer>* global_read_buffer;
-    char read_buffer[256];
     bool write_in_flight = false;
 };
 
@@ -234,9 +233,8 @@ int main() {
     cout<<"Serving on port Test "<< portnum << endl;
     uv_run(uv_default_loop(), UV_RUN_DEFAULT);
  
-    cout<<"Connection pool san check"<<endl;
-    memory_pool->verify_no_leaks();
-    cout<<"Buffer pool san check"<<endl;
+
+    memory_pool->verify_no_leaks(); 
     read_buffer->verify_no_leaks();
     uv_loop_close(uv_default_loop());
     uv_library_shutdown();
