@@ -22,13 +22,14 @@
 #### Completed:
 - Merged pull requests and pulled in libuv as a dep nodeJs style
 
-# 3/16/2026 (LC week goals):
-- Implement a separate read/write buffer pool for the server component
-- Implement an server-side cache for static files.
+# 3/16/2026:
+- Implement a separate read/write buffer pool for the server component (Done)
 
-#  3/23/2026 (Runtime week goals):
-- Integrate llhttp into server.
-- Abstract out the server into an agnostic interface class for future embedding
-- Design an extensive load test for the server and the memory pool. Export results into diagrams.
+#  3/23/2026:
+- Abstract out the server into an agnostic interface class for future embedding (In progress)
+- Embed server with V8
 
-
+# Punt goals:
+- Implement an server-side cache for static files. (PUNT)
+- Integrate llhttp into server. (PUNT)
+- Design an extensive load test for the server and the memory pool. Export results into diagrams (Punt)

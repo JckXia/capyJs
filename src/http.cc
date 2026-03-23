@@ -14,13 +14,9 @@ using namespace std;
     Note, there's a single fd that maps to the server during the life time of the server.
 
 */
-/*
-    What's the point of the N_BACKLOG?
-        -> It's a traffic shaping mechanism to handle bursty traffic
-        -> essentially leaky bucket as a queue technique! Except the drain rate is how fast the server can process the request
-*/
 #define N_BACKLOG 10
 #define MEM_POOL_SIZE 10000
+#define READ_BUFFER_POOL_SIZE 200
 const char* msg = 
     "HTTP/1.1 200 OK\r\n"
     "Content-Type: text/plain\r\n"
@@ -28,19 +24,32 @@ const char* msg =
     "Connection: keep-alive\r\n"
     "\r\n"
     "hello from capyJs server\n";
+struct ReadBuffer {
+    char read_buffer[256];
+};
 // Keep an eye on this to ensure it doesnt grow too big
 struct ClientState {
     uv_tcp_t socket;
     uv_write_t write_handle;
     
     MemPool<ClientState>* mem_pool; // self ref fror cleanup
-    char read_buffer[256];
+    MemPool<ReadBuffer>* global_read_buffer;
     bool write_in_flight = false;
 };
 
+
+// This struct manages all resources, caches used by the server process
 struct ServerContext {
+ 
     MemPool<uv_tcp_t>* emergency_handles;
     MemPool<ClientState>* mem_pool;
+    MemPool<ReadBuffer>* read_buffer_pool;
+    ~ServerContext() {
+        mem_pool->verify_no_leaks(); 
+        read_buffer_pool->verify_no_leaks();
+        delete mem_pool;
+        delete read_buffer_pool;
+    }
 };
 
 
@@ -54,11 +63,6 @@ void on_client_closed(uv_handle_t* handle) {
     uv_tcp_t* client_sock = (uv_tcp_t*)handle;
     ClientState* client = (ClientState*) client_sock->data;
     client->mem_pool->release(client); 
-}
-
-void init_client_state(ClientState * client_state, MemPool<ClientState>* pool) {
-    uv_tcp_t* client_sock = &client_state->socket;
-    client_state->mem_pool = pool;
 }
 
 void init_client_socket(ClientState* client_state) {
@@ -86,26 +90,40 @@ void on_write(uv_write_t* req, int status) {
  
 }
 
+void print_read_request(const uv_buf_t* buf) {
+    auto base = buf->base;
+    int len= buf->len;
+    for (int i =0;i< len; i ++) {
+        cout<<base[i];
+    }
+    cout<<endl;
+}
+
+
 void on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf) {
+    ClientState* client_state = (ClientState*)client->data;
+    client_state->global_read_buffer->release((ReadBuffer*) buf->base);
     if (nread > 0){
         // We got data!
-        ClientState* client_state = (ClientState*)client->data;
+  
        if(client_state->write_in_flight) {
             return;
        }
+      // print_read_request(buf);
+        // client_state->global_read_buffer->release((ReadBuffer*) buf->base);
         client_state->write_in_flight = true;
-        uv_buf_t buf = uv_buf_init((char*)msg, strlen(msg));
+        uv_buf_t buff = uv_buf_init((char*)msg, strlen(msg));
         uv_write_t* write_handle = &client_state->write_handle;
         write_handle->data = client_state;
         int rc;
-        if (rc = uv_write(write_handle, client, &buf, 1, on_write) < 0) {
+        if (rc = uv_write(write_handle, client, &buff, 1, on_write) < 0) {
             std::cout<<"Write to socket failed! " << uv_strerror(rc) << std::endl;
         }
-        // uv_write(write_handle, client, &buf, 1, on_write);
         return;
     }
 
     if (nread < 0){
+        // client_state->global_read_buffer->release((ReadBuffer*) buf->base);
         // nread < 0 means client closed the connection (UV_EOF)
         if(nread != UV_EOF) {
             
@@ -116,10 +134,19 @@ void on_read(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf) {
     }
 }
 
+ 
+// Assume we are only getting a SINGLE chunk at the moemnt..ignoring suggested_size
 void alloc_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t *buf) {
     ClientState* clientState = (ClientState*) handle->data;
-    buf->base = clientState->read_buffer;
-    buf->len = 256;
+    
+    ReadBuffer* buffer = clientState->global_read_buffer->acquire();
+    if(buffer != nullptr) {
+        buf->base = buffer->read_buffer;
+        buf->len = 256;
+    } else {
+        std::cout<<"Read buffer exhuasted! \n";
+    }
+ 
 }
 
 
@@ -131,12 +158,11 @@ void on_peer_connected(uv_stream_t* server_stream, int status) {
     ServerContext* ctx = (ServerContext*) server_stream->data;
 
     MemPool<ClientState>* pool = ctx->mem_pool;
+    MemPool<ReadBuffer>* read_buffer = ctx->read_buffer_pool;
 
-    ClientState *client = pool->acquire();  //TODO: More graceful shutdown handling
+    ClientState *client = pool->acquire();
     if(client == nullptr) {
         std::cerr<<"Connection pool is exhausted!\n";
-        // Pool exhausted — accept and immediately close to prevent backlog buildup
-        // uv_tcp_t temp_socket;
         uv_tcp_t* temp_socket = ctx->emergency_handles->acquire();
         temp_socket->data = ctx;
         int rc = uv_tcp_init(uv_default_loop(), temp_socket); // Needs to let libuv know about socket
@@ -149,8 +175,9 @@ void on_peer_connected(uv_stream_t* server_stream, int status) {
  
         return;
     }
- 
-    init_client_state(client, pool);
+
+    client->mem_pool = pool;
+    client->global_read_buffer = read_buffer;
     init_client_socket(client);
 
     if(uv_accept(server_stream, (uv_stream_t*) &client->socket) == 0) {  // start listening to incoming requests
@@ -169,7 +196,15 @@ void on_signal(uv_signal_t* handle, int signum) {
     uv_close((uv_handle_t*)handle, NULL);
     uv_stop(uv_default_loop());
 }
- 
+
+void init_server_context(ServerContext * ctx) {
+    MemPool<ClientState>* memory_pool = new MemPool<ClientState>(MEM_POOL_SIZE);  // Alloc'd on the HEAP bc this'd overflow in resource constrainted environments
+    MemPool<ReadBuffer>* read_buffer = new MemPool<ReadBuffer>(READ_BUFFER_POOL_SIZE); // 
+    MemPool<uv_tcp_t> emergency_handles(16);
+    ctx->emergency_handles = &emergency_handles;
+    ctx->mem_pool = memory_pool;
+    ctx->read_buffer_pool = read_buffer;
+}
 int main() {
     setvbuf(stdout, NULL, _IONBF, 0);
     int portnum = 9091;
@@ -186,11 +221,8 @@ int main() {
     uv_signal_start(&sig, on_signal, SIGINT);
 
     ServerContext ctx;
-    MemPool<ClientState>* memory_pool = new MemPool<ClientState>(MEM_POOL_SIZE);  // Alloc'd on the HEAP bc this'd overflow in resource constrainted environments
-    MemPool<uv_tcp_t> emergency_handles(16);
-    ctx.emergency_handles = &emergency_handles;
-    ctx.mem_pool = memory_pool;
-
+    init_server_context(&ctx);
+ 
     uv_tcp_t server_stream;
     server_stream.data = &ctx;
 
@@ -210,11 +242,8 @@ int main() {
     cout<<"Serving on port Test "<< portnum << endl;
     uv_run(uv_default_loop(), UV_RUN_DEFAULT);
  
-    // memory_pool->dump_raw_state();
-    memory_pool->verify_no_leaks();
+ 
     uv_loop_close(uv_default_loop());
     uv_library_shutdown();
-
-    delete memory_pool;
     return 0;
 }
