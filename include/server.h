@@ -10,30 +10,65 @@
 #define READ_BUFFER_POOL_SIZE 200
 
 using namespace std; // get rid of this when we add an actual logger to the server
+    struct ReadBuffer {
+            char read_buffer[256];
+            ReadBuffer *next;
+    };
 
+    struct ClientState {
+        uv_tcp_t socket;
+        uv_write_t write_handle;
+        MemPool<ClientState>* mem_pool;
+        MemPool<ReadBuffer>* global_read_buffer;
+        bool write_in_flight = false;
+        ReadBuffer * recv_head;
+        ReadBuffer * recv_tail;
+        size_t recv_count = 0;
+        
+        void recvNewBuffer(ReadBuffer* buff) {
+            if (recv_count == 0) {
+                recv_head = buff;
+                recv_tail = recv_head;
+            } else {
+                recv_tail->next = buff;
+                recv_tail = buff;
+            }
+            recv_count += 1;
+        }
+
+        void clearBuffer(ReadBuffer* buff) {
+            while (recv_head != nullptr) {
+                ReadBuffer * currHead = recv_head;
+                ReadBuffer * next = recv_head->next;
+                delete currHead;
+                recv_head = next;
+                recv_count -= 1;
+            }
+            recv_head = nullptr;
+            recv_tail = nullptr;
+        }
+
+        // TODO: Add llhttp here for function handling dispatching (server concern)
+        void constructRequestObject() {
+            clearBuffer(recv_head);
+
+        }
+
+    };
 // We might move to an approach that registers URL mapping against function handler (i.e express' app.get("/get", func(){}) style)
 // This should be enough for embedding with V8 for now. It encapsualtes a lot of the libuv plumbing under the hood
+// Actually, let's just do it right and get it over with
 class Server {
     public:
         explicit Server(int portNum, const char *portAddr); // More options later
+       // virtual void handleSyncRequest() = 0;
        // virtual void handleRequest(const uv_buf_t* req) = 0; 
         int run();
     
     private:
         int portNum;
         const char * portAddr;        
-        struct ReadBuffer {
-            char read_buffer[256];
-        };
-
-    struct ClientState {
-        uv_tcp_t socket;
-        uv_write_t write_handle;
-    
-        MemPool<ClientState>* mem_pool; // self ref fror cleanup
-        MemPool<ReadBuffer>* global_read_buffer;
-        bool write_in_flight = false;
-    };
+        
         // Helper structs:
         struct ServerContext {
  
@@ -93,7 +128,7 @@ void Server::on_write_cb(uv_write_t* req, int status) {
 }
 
 void Server::on_read_cb(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf) {
-        ClientState* client_state = (ClientState*)client->data;
+    ClientState* client_state = (ClientState*)client->data;
     client_state->global_read_buffer->release((ReadBuffer*) buf->base);
     if (nread > 0){
         // We got data!
@@ -101,8 +136,6 @@ void Server::on_read_cb(uv_stream_t* client, ssize_t nread, const uv_buf_t* buf)
        if(client_state->write_in_flight) {
             return;
        }
-      // print_read_request(buf);
-        // client_state->global_read_buffer->release((ReadBuffer*) buf->base);
         client_state->write_in_flight = true;
         const char* msg = 
     "HTTP/1.1 200 OK\r\n"
