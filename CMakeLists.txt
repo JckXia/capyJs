@@ -27,3 +27,9 @@ add_executable(mem_pool_test
 add_executable(mem_pool_perf
     tests/mem_pool_perf.cc
 )
+
+add_executable(client_state_test
+    tests/client_state_test.cc
+)
+
+target_link_libraries(client_state_test uv)
