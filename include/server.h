@@ -20,7 +20,7 @@ struct RequestObject {
 };
 
 struct ResponseObject {
-  char *response;
+  const char *response;
   size_t response_len;
 };
 
@@ -50,8 +50,7 @@ struct ClientState {
         memcpy(buff->read_buffer, buf->base, buf->len);
         buff->len = buf->len;
         recv_len += buf->len;
-
-        if(recv_count == 0) {
+        if(recv_head == nullptr) {
             recv_head = buff;
         } else{
             recv_tail->next = buff;
@@ -61,7 +60,7 @@ struct ClientState {
     }
   }
 
-  void clearBuffer(ReadBuffer *buff) {
+  void clearBuffer() {
     while (recv_head != nullptr) {
       ReadBuffer *currHead = recv_head;
       ReadBuffer *next = recv_head->next;
@@ -94,7 +93,6 @@ struct ClientState {
   // TODO: Add llhttp here for function handling dispatching (server concern)
   void constructRequestObject(RequestObject& object) {
     serializeRecvBuffer(); // More of an helper function for debugging
-    clearBuffer(recv_head);
     memcpy(object.verb, "GET", 3);
     object.verb[3] = '\0';
   }
@@ -106,8 +104,8 @@ struct ClientState {
 class Server {
 public:
   explicit Server(int portNum, const char *portAddr); // More options later
-  // virtual void handleSyncRequest() = 0;
-  // virtual void handleRequest(const uv_buf_t* req) = 0;
+  static ResponseObject handleSyncRequest(RequestObject& req);
+ 
   int run();
 
 private:
@@ -178,51 +176,72 @@ void Server::on_write_cb(uv_write_t *req, int status) {
 void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
                         const uv_buf_t *buf) {
   ClientState *client_state = (ClientState *)client->data;
-  client_state->global_read_buffer->release((ReadBuffer *)buf->base);
-  if (nread > 0) {
-    // We got data!
 
+  if (nread > 0) {
+    client_state->recvNewBuffer(buf);
+    client_state->global_read_buffer->release((ReadBuffer *)buf->base);
+
+    
     if (client_state->write_in_flight) {
       return;
     }
     client_state->write_in_flight = true;
-    const char *msg = "HTTP/1.1 200 OK\r\n"
-                      "Content-Type: text/plain\r\n"
-                      "Content-Length: 25\r\n"
-                      "Connection: keep-alive\r\n"
-                      "\r\n"
-                      "hello from capyJs server\n";
-    uv_buf_t buff = uv_buf_init((char *)msg, strlen(msg));
+
+    RequestObject req;
+    client_state->constructRequestObject(req);
+    ResponseObject res = handleSyncRequest(req);
+    client_state->clearBuffer();
+    uv_buf_t buff = uv_buf_init((char *)res.response, res.response_len);
     uv_write_t *write_handle = &client_state->write_handle;
     write_handle->data = client_state;
     int rc;
-    if (rc = uv_write(write_handle, client, &buff, 1, on_write_cb) < 0) {
+    if ((rc = uv_write(write_handle, client, &buff, 1, on_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
     }
-    return;
-  }
-
-  if (nread < 0) {
-    // client_state->global_read_buffer->release((ReadBuffer*) buf->base);
-    // nread < 0 means client closed the connection (UV_EOF)
-    if (nread != UV_EOF) {
+  } else if (nread == UV_EOF) {
+    client_state->global_read_buffer->release((ReadBuffer *)buf->base);
+    if (!uv_is_closing((uv_handle_t *)client)) {
+      uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
+  } else if (nread == UV_ENOBUFS) {
+    std::cout<< "Throttling requests because pool ran out! \n";
+    client_state->global_read_buffer->release((ReadBuffer *)buf->base);
+
+    if (!uv_is_closing((uv_handle_t *)client)) {
+      uv_close((uv_handle_t *)client, on_client_closed_cb);
+    }
+  } else {
+    client_state->global_read_buffer->release((ReadBuffer *)buf->base);
+    // Clsoe 
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
   }
 }
 
+ResponseObject Server::handleSyncRequest(RequestObject& req) {
+    const char *msg = "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: text/plain\r\n"
+                      "Content-Length: 25\r\n"
+                      "Connection: keep-alive\r\n"
+                      "\r\n"
+                      "hello from capyJS Server\n";
+    ResponseObject r;
+    r.response = msg;
+    r.response_len = strlen(msg);
+    return r;
+}
+
 void Server::on_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
                                 uv_buf_t *buf) {
-  ClientState *clientState = (ClientState *)handle->data;
 
+  ClientState *clientState = (ClientState *)handle->data;
   ReadBuffer *buffer = clientState->global_read_buffer->acquire();
   if (buffer != nullptr) {
     buf->base = buffer->read_buffer;
     buf->len = 256;
   } else {
-    std::cout << "Read buffer exhuasted! \n";
+    // std::cout << "Read buffer exhuasted! \n";
   }
 }
 

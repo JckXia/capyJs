@@ -49,7 +49,6 @@ void test_client_state_recv_new_buffer_arb_size() {
 }
 
 
-
 int main() {
     test_client_state_recv_new_buffer();
     test_client_state_recv_new_buffer_arb_size();
