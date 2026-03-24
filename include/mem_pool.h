@@ -95,10 +95,7 @@ T* MemPool<T>::acquire() {
 
 template<typename T>
 void MemPool<T>::release(T* ptr) {
-    if(ptr == nullptr) {
-        return;
-    }
-
+    assert(ptr != nullptr && "ERROR attempting to free an nullptr");
     Slot* slot = reinterpret_cast<Slot*>(ptr);
     assert(slot->in_use && "Double free detected!");
     if(slot == free_list_head) {

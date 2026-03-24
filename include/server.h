@@ -65,6 +65,33 @@ struct ClientState {
         recv_tail = buff;
     }
   }
+  
+  void recvNewBuffer(ReadBuffer * buff) {
+    if (buff != nullptr) {
+        recv_len += buff->len;
+        if (recv_head == nullptr) {
+            recv_head = buff;
+        } else {
+            recv_tail->next = buff;
+        }
+        recv_count += 1;
+        recv_tail = buff;
+    }
+   // ReadBuffer* buff = global_read_buffer->acquire();
+    // TODO: Handle this
+    // if (buff != nullptr) {
+    //     // memcpy(buff->read_buffer, buf->base, buf->len);
+    //     // buff->len = buf->len;
+    //     recv_len += buf->len;
+    //     if(recv_head == nullptr) {
+    //         recv_head = buff;
+    //     } else{
+    //         recv_tail->next = buff;
+    //     }
+    //     recv_count += 1;
+    //     recv_tail = buff;
+    // }
+  }
 
   void clearBuffer() {
     while (recv_head != nullptr) {
@@ -98,7 +125,7 @@ struct ClientState {
 
   // STUBBING http request
   void constructRequestObject(RequestObject& object) {
-    serializeRecvBuffer(); // More of an helper function for debugging
+    // serializeRecvBuffer(); // More of an helper function for debugging
     memcpy(object.verb, "GET", 3);
     memcpy(object.uri, "/hello",6);
     object.verb[3] = '\0';
@@ -112,7 +139,6 @@ struct ClientState {
 class Server {
 public:
   explicit Server(int portNum, const char *portAddr); // More options later
-  static ResponseObject handleSyncRequest(RequestObject& req);
   void registerFuncHandler(const char * method, const char * uri, Handler handler);
  
   int run();
@@ -184,17 +210,21 @@ void Server::on_write_cb(uv_write_t *req, int status) {
 void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
                         const uv_buf_t *buf) {
   ClientState *client_state = (ClientState *)client->data;
-
+ 
   if (nread > 0) {
-    client_state->recvNewBuffer(buf);
-    client_state->global_read_buffer->release((ReadBuffer *)buf->base);
-
-    
+ 
+    ReadBuffer* rb = (ReadBuffer*) buf->base;
+    rb->len = nread;
+ 
+ 
+    // client_state->global_read_buffer->release((ReadBuffer *)buf->base);
     if (client_state->write_in_flight) {
+      client_state->global_read_buffer->release(rb);
       return;
     }
     client_state->write_in_flight = true;
-
+    client_state->recvNewBuffer(rb);
+    
     RequestObject req;
     ResponseObject res;
     client_state->constructRequestObject(req);
@@ -216,37 +246,28 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
     }
   } else if (nread == UV_EOF) {
-    client_state->global_read_buffer->release((ReadBuffer *)buf->base);
+    // client_state->clearBuffer();
+    client_state->global_read_buffer->release((ReadBuffer *)buf->base);     
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
   } else if (nread == UV_ENOBUFS) {
     std::cout<< "Throttling requests because pool ran out! \n";
-    client_state->global_read_buffer->release((ReadBuffer *)buf->base);
-
+    //client_state->clearBuffer();
+    //client_state->global_read_buffer->release((ReadBuffer *)buf->base);
+    
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
   } else {
+    // client_state->clearBuffer();
     client_state->global_read_buffer->release((ReadBuffer *)buf->base);
+    
     // Clsoe 
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
   }
-}
-
-ResponseObject Server::handleSyncRequest(RequestObject& req) {
-    const char *msg = "HTTP/1.1 200 OK\r\n"
-                      "Content-Type: text/plain\r\n"
-                      "Content-Length: 25\r\n"
-                      "Connection: keep-alive\r\n"
-                      "\r\n"
-                      "hello from capyJS Server\n";
-    ResponseObject r;
-    r.response = msg;
-    r.response_len = strlen(msg);
-    return r;
 }
 
 void Server::on_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
@@ -257,8 +278,11 @@ void Server::on_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
   if (buffer != nullptr) {
     buf->base = buffer->read_buffer;
     buf->len = 256;
+ 
   } else {
-    // std::cout << "Read buffer exhuasted! \n";
+    buf->base = nullptr;
+    buf->len =0;
+ 
   }
 }
 
