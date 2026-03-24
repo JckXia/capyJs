@@ -4,12 +4,15 @@
 #include "mem_pool.h"
 #include "uv.h"
 #include <cstring>
+#include <functional>
+#include <map>
 
 // Below can probably become variable params/config object
 #define N_BACKLOG 10
 #define MEM_POOL_SIZE 10000
 #define READ_BUFFER_POOL_SIZE 200
 
+ 
 using namespace std; // get rid of this when we add an actual logger to the
                      // server
 // Client state can probably be separated into their own class
@@ -23,6 +26,9 @@ struct ResponseObject {
   const char *response;
   size_t response_len;
 };
+using Handler = std::function<void(RequestObject&, ResponseObject&)>;
+
+ 
 
 struct ReadBuffer {
   ReadBuffer(): next(nullptr) {}
@@ -90,11 +96,13 @@ struct ClientState {
     std::cout<<recv_buffer<<std::endl;
   }
 
-  // TODO: Add llhttp here for function handling dispatching (server concern)
+  // STUBBING http request
   void constructRequestObject(RequestObject& object) {
     serializeRecvBuffer(); // More of an helper function for debugging
     memcpy(object.verb, "GET", 3);
+    memcpy(object.uri, "/hello",6);
     object.verb[3] = '\0';
+    object.uri[6] = '\0';
   }
 };
 // We might move to an approach that registers URL mapping against function
@@ -105,16 +113,17 @@ class Server {
 public:
   explicit Server(int portNum, const char *portAddr); // More options later
   static ResponseObject handleSyncRequest(RequestObject& req);
+  void registerFuncHandler(const char * method, const char * uri, Handler handler);
  
   int run();
 
 private:
   int portNum;
   const char *portAddr;
-
+  std::map<std::pair<std::string, std::string>, Handler> routes_;
   // Helper structs:
   struct ServerContext {
-
+    std::map<std::pair<std::string, std::string>, Handler> routes_;
     MemPool<uv_tcp_t> *emergency_handles;
     MemPool<ClientState> *mem_pool;
     MemPool<ReadBuffer> *read_buffer_pool;
@@ -136,7 +145,7 @@ private:
   static void on_peer_connected(uv_stream_t *server_stream, int status);
   static void on_client_closed_emergency(uv_handle_t *handle);
   // General helper functions
-  static void init_server_context(ServerContext *ctx);
+  void init_server_context(ServerContext *ctx);
   static void init_client_socket(ClientState *client_state);
 };
 
@@ -146,7 +155,6 @@ void Server::init_client_socket(ClientState *client_state) {
   int rc;
   if ((rc = uv_tcp_init(uv_default_loop(), client_sock)) <
       0) { // create an fd mapped to the client for the kernel
-    // die("uv_tcp_init failed: %s", uv_strerror(rc));
     std::cout << " UV TCP INIT FAILED " << uv_strerror(rc) << std::endl;
     return;
   }
@@ -188,9 +196,18 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     client_state->write_in_flight = true;
 
     RequestObject req;
+    ResponseObject res;
     client_state->constructRequestObject(req);
-    ResponseObject res = handleSyncRequest(req);
     client_state->clearBuffer();
+    ServerContext * ctx =  (ServerContext*) uv_default_loop()->data;
+    auto routes = ctx->routes_;
+    auto it = routes.find({req.verb, req.uri});
+    if (it != routes.end()) {
+        it->second(req, res);
+    } else {
+        // TODO: Add handling for route-not-found, or throw an exception
+    }
+
     uv_buf_t buff = uv_buf_init((char *)res.response, res.response_len);
     uv_write_t *write_handle = &client_state->write_handle;
     write_handle->data = client_state;
@@ -306,6 +323,11 @@ void Server::init_server_context(ServerContext *ctx) {
   ctx->emergency_handles = &emergency_handles;
   ctx->mem_pool = memory_pool;
   ctx->read_buffer_pool = read_buffer;
+  ctx->routes_ = routes_;
+}
+
+void Server::registerFuncHandler(const char * method, const char* uri, Handler handler) {
+    routes_[{method, uri}] = handler;
 }
 
 Server::Server(int portNum, const char *portAddr)
@@ -330,7 +352,7 @@ int Server::run() {
 
   uv_tcp_t server_stream;
   server_stream.data = &ctx;
-
+  
   if ((rc = uv_tcp_init(uv_default_loop(), &server_stream)) <
       0) { // This is where the fd is created. Kernel has no idea what IP/Port
            // is belongs to
@@ -352,6 +374,10 @@ int Server::run() {
            // handshakes and queueing them
     cout << "uv listen failed " << uv_strerror(rc) << endl;
   }
+
+  uv_loop_t* loop = uv_default_loop();
+  loop->data = &ctx;
+  
   cout << "Serving on port Test " << portNum << endl;
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
