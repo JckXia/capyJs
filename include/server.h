@@ -26,9 +26,8 @@ struct ResponseObject {
   const char *response;
   size_t response_len;
 };
-using Handler = std::function<void(RequestObject&, ResponseObject&)>;
 
- 
+using Handler = std::function<void(RequestObject&, ResponseObject&)>;
 
 struct ReadBuffer {
   ReadBuffer(): next(nullptr) {}
@@ -77,20 +76,6 @@ struct ClientState {
         recv_count += 1;
         recv_tail = buff;
     }
-   // ReadBuffer* buff = global_read_buffer->acquire();
-    // TODO: Handle this
-    // if (buff != nullptr) {
-    //     // memcpy(buff->read_buffer, buf->base, buf->len);
-    //     // buff->len = buf->len;
-    //     recv_len += buf->len;
-    //     if(recv_head == nullptr) {
-    //         recv_head = buff;
-    //     } else{
-    //         recv_tail->next = buff;
-    //     }
-    //     recv_count += 1;
-    //     recv_tail = buff;
-    // }
   }
 
   void clearBuffer() {
@@ -205,6 +190,7 @@ void Server::on_write_cb(uv_write_t *req, int status) {
   }
   ClientState *client_state = (ClientState *)req->data;
   client_state->write_in_flight = false;
+  uv_read_start((uv_stream_t*)&client_state->socket, on_alloc_buffer_cb, on_read_cb);
 }
 
 void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
@@ -220,6 +206,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     // client_state->global_read_buffer->release((ReadBuffer *)buf->base);
     if (client_state->write_in_flight) {
       client_state->global_read_buffer->release(rb);
+      uv_read_stop(client);
       return;
     }
     client_state->write_in_flight = true;
@@ -246,15 +233,13 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
     }
   } else if (nread == UV_EOF) {
-    // client_state->clearBuffer();
+ 
     client_state->global_read_buffer->release((ReadBuffer *)buf->base);     
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
   } else if (nread == UV_ENOBUFS) {
     std::cout<< "Throttling requests because pool ran out! \n";
-    //client_state->clearBuffer();
-    //client_state->global_read_buffer->release((ReadBuffer *)buf->base);
     
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
