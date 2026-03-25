@@ -44,4 +44,12 @@ struct HttpContext {
     void release_read_buffer(ReadBuffer * buff) {
         read_buffer_pool->release(buff);
     }
+
+    uv_tcp_t* acquire_emergency_handle() {
+        return emergency_handles->acquire();
+    }
+
+    void release_emergency_handle(uv_tcp_t *handle) {
+        emergency_handles->release(handle);
+    }
 };

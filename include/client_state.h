@@ -1,5 +1,6 @@
 #pragma once
 #include <cstring>
+#include "uv.h"
 #include "http_message.h"
 struct ReadBuffer {
   ReadBuffer() : next(nullptr), len(0) {}

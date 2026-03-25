@@ -13,10 +13,10 @@ include_directories(include)
 add_executable(server
  src/http.cc
 )
-add_executable(dev
- src/dev.cc
+add_executable(capy
+ src/capy_main.cc
 )
-target_link_libraries(dev uv)
+target_link_libraries(capy uv)
 target_link_libraries(server uv)
 
 # -- Tests ---------------------------------------------
