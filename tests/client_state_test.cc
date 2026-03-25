@@ -1,55 +1,73 @@
 #include <iostream>
 #include "uv.h"
-#include "server.h" //TODO: This is ugly..ClientState should be its own file...
-#include "mem_pool.h"
+ 
+#include "client_op.h"
 #include <cassert>
-void init_client_state(ClientState& cli) {
-    cli.global_read_buffer = new MemPool<ReadBuffer>(200);
-}
-
-void tear_down_client_state(ClientState& cli) {
-    cli.global_read_buffer->verify_no_leaks();
-    delete cli.global_read_buffer;
-}
-
-void test_client_state_recv_new_buffer() {
-    ClientState c;
-    RequestObject o;
-    init_client_state(c);
-    uv_buf_t buf1 = uv_buf_init((char * )"abc", 3);
-    uv_buf_t buf2 = uv_buf_init((char * )"def", 3);
-    uv_buf_t buf3 = uv_buf_init((char * )"ghi", 3);
-
-    c.recvNewBuffer(&buf1);
-    c.recvNewBuffer(&buf2);
-    c.recvNewBuffer(&buf3);
-    assert(c.recv_count == 3);
-    c.constructRequestObject(o);
+#include <string.h>
  
-    assert(strcmp(o.verb, "GET") == 0);
-    tear_down_client_state(c);
-}
-
-void test_client_state_recv_new_buffer_arb_size() {
+void test_creation_set_head_tail_null() {
     ClientState c;
-    RequestObject o;
-    init_client_state(c);
-    uv_buf_t buf1 = uv_buf_init((char * )"a", 1);
-    uv_buf_t buf2 = uv_buf_init((char * )"def", 3);
-    uv_buf_t buf3 = uv_buf_init((char * )"ghiz", 4);
-
-    c.recvNewBuffer(&buf1);
-    c.recvNewBuffer(&buf2);
-    c.recvNewBuffer(&buf3);
-    assert(c.recv_count == 3);
-    c.constructRequestObject(o);
- 
-    assert(strcmp(o.verb, "GET") == 0);
-    tear_down_client_state(c);
+    assert(c.recv_head == nullptr);
+    assert(c.recv_tail == nullptr);
 }
+
+void test_client_recv_buffer() {
+    ClientState c;
+    ReadBuffer buf1;
+    buf1.read_buffer[0] = 'a';
+    buf1.len = 1;
+
+    ReadBuffer buf2;
+    buf2.read_buffer[0] = 'b';
+    buf2.len = 1;
+    ReadBuffer buf3;
+    buf3.read_buffer[0] = 'c';
+    buf3.len = 1;
+
+    client_ops::recv_new_buffer(&c, &buf1);
+    client_ops::recv_new_buffer(&c, &buf2);
+    client_ops::recv_new_buffer(&c, &buf3);
+    assert(client_ops::get_recv_packet_count(&c) == 3);
+    assert(client_ops::get_recv_packet_count(&c) == 3);
+}
+
+void test_client_recv_and_clear_buffer() {
+    HttpContext http_ctx;
+    MemPool<uv_tcp_t> ehandle(16);
+    http_ctx.emergency_handles = &ehandle;
+    http_ctx.connection_pool = new MemPool<ClientState> (16);
+    http_ctx.read_buffer_pool = new MemPool<ReadBuffer> (16);
+
+    RuntimeContext ctx;
+    ctx.http_ctx = &http_ctx;
+
+    ClientState c;
+    ReadBuffer* buf1 = ctx.http_ctx->acquire_read_buffer();
+    strcpy(buf1->read_buffer, "abc");  
+    buf1->len = 3;
+
+    ReadBuffer* buf2 = ctx.http_ctx->acquire_read_buffer();
+    strcpy(buf2->read_buffer, "jkl");  
+    buf2->len = 3;
+    
+    client_ops::recv_new_buffer(&c, buf1);
+    client_ops::recv_new_buffer(&c, buf2);
+    assert(client_ops::get_recv_packet_count(&c) == 2);
+    client_ops::print_recv_buffer(&c);
+    client_ops::clear_buffer(&c,&ctx);
+}
+
+void test_client_populate_req() {
+    ClientState c;
+    RequestObject req;
+    client_ops::populate_request_object(&c, req);
+    assert(strcmp(req.verb, "GET") == 0);
+}
+
 
 
 int main() {
-    test_client_state_recv_new_buffer();
-    test_client_state_recv_new_buffer_arb_size();
+   test_client_recv_buffer();
+   test_client_recv_and_clear_buffer();
+   test_client_populate_req();
 }
