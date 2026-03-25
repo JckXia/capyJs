@@ -127,6 +127,7 @@ public:
   void registerFuncHandler(const char * method, const char * uri, Handler handler);
  
   int run();
+  int listen();
 
 private:
   int portNum;
@@ -159,6 +160,10 @@ private:
   void init_server_context(ServerContext *ctx);
   static void init_client_socket(ClientState *client_state);
 };
+
+int Server::listen() {
+    
+}
 
 void Server::init_client_socket(ClientState *client_state) {
   uv_tcp_t *client_sock = &client_state->socket;
