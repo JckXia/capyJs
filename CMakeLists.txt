@@ -24,6 +24,7 @@ add_library(quickjs STATIC
     ${QJS_DIR}/libregexp.c
     ${QJS_DIR}/libunicode.c
     ${QJS_DIR}/cutils.c
+    ${QJS_DIR}/dtoa.c
 )
 target_include_directories(quickjs PUBLIC ${QJS_DIR})
 target_compile_definitions(quickjs PRIVATE _GNU_SOURCE CONFIG_VERSION="2024-01-13" CONFIG_BIGNUM)
@@ -43,6 +44,8 @@ add_executable(capy
 )
  
 add_library(server src/server.cc)
+target_include_directories(server PRIVATE ${QJS_DIR})  # ← add this
+target_link_libraries(server uv_a quickjs)
 target_link_libraries(capy server uv_a quickjs)
 
 
@@ -59,4 +62,4 @@ add_executable(client_state_test
     tests/client_state_test.cc
 )
 
-target_link_libraries(client_state_test uv)
+target_link_libraries(client_state_test uv quickjs)

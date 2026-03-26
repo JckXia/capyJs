@@ -7,4 +7,5 @@ struct RequestObject {
 struct ResponseObject {
   const char *response;
   size_t response_len;
+  char response_buf[2048]; 
 };
