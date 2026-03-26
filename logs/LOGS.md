@@ -35,5 +35,6 @@
 - Can register URI routing with server + function callbacks (Done!)
 - Embed QuickJs (In Progress)
 - Parsing HTTP requests using llhttp (Todo)
+- NOT have the function callback be responsible for "decorating" the response object into a correct payload (headers, etc) (Todo)
 - Server capable of serving static files (like html, css, etc) to caller (Todo)
 - Support Stream, Timer, FileSystem and Fetch (Todo)
