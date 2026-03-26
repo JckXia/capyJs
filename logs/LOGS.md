@@ -26,10 +26,14 @@
 - Implement a separate read/write buffer pool for the server component (Done)
 
 #  3/23/2026:
-- Abstract out the server into an agnostic interface class for future embedding (In progress)
-- Embed server with V8
+- Abstract out the server into an agnostic interface class for future embedding (Done)
+- Embed server with V8 (In Progress)
 
-# Punt goals:
-- Implement an server-side cache for static files. (PUNT)
-- Integrate llhttp into server. (PUNT)
-- Design an extensive load test for the server and the memory pool. Export results into diagrams (Punt)
+
+# Overarching goals:
+- Server capable of withstanding C10K barrage (Done!)
+- Can register URI routing with server + function callbacks (Done!)
+- Embed QuickJs (In Progress)
+- Parsing HTTP requests using llhttp (Todo)
+- Server capable of serving static files (like html, css, etc) to caller (Todo)
+- Support Stream, Timer, FileSystem and Fetch (Todo)
