@@ -111,12 +111,6 @@ void Server::on_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
   }
 }
 
-// Move signal handlers to an a concern handled by the runtime itself
-void Server::on_signal(uv_signal_t *handle, int signum) {
-  uv_signal_stop(handle);
-  uv_close((uv_handle_t *)handle, NULL);
-  uv_stop(uv_default_loop());
-}
 
 void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
   if (status < 0) {
