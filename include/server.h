@@ -31,10 +31,11 @@ public:
                            Handler handler);
 
   int run();
-  int listen();
 
 private:
   RuntimeContext *_env;
+  struct sockaddr_in _server_addr;
+  uv_tcp_t _server_stream;
   int portNum;
   const char *portAddr;
 
@@ -124,7 +125,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
   } else if (nread == UV_EOF) {
 
     ctx->http_ctx->release_read_buffer((ReadBuffer *)buf->base);
-    //   client_state->global_read_buffer->release((ReadBuffer *)buf->base);
+
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
@@ -216,44 +217,35 @@ Server::Server(int portNum, const char *portAddr)
 Server::Server(int portNum, RuntimeContext *env)
     : portNum(portNum), _env(env) {}
 
-int Server::listen() { return 0; }
 int Server::run() {
   int rc;
   struct sockaddr_in server_address;
-  if ((rc = uv_ip4_addr("0.0.0.0", portNum, &server_address)) <
+  if ((rc = uv_ip4_addr("0.0.0.0", portNum, &_server_addr)) <
       0) { // No kernel interaction, simply fills a sockaddr_in struct in proc
            // memory
     cout << "uv_ip4_addr_init failed" << endl;
     return -1;
   }
 
-  uv_signal_t sig;
   uv_loop_t *loop = this->_env->loop;
-  uv_signal_init(loop, &sig);
-  uv_signal_start(&sig, on_signal, SIGINT);
-
-  //   ServerContext ctx;
-  //   init_server_context(&ctx);
-
   uv_tcp_t server_stream;
-  //   server_stream.data = &ctx;
 
-  if ((rc = uv_tcp_init(loop, &server_stream)) <
+  if ((rc = uv_tcp_init(loop, &_server_stream)) <
       0) { // This is where the fd is created. Kernel has no idea what IP/Port
            // is belongs to
     cout << "uv_tcp_init_failed " << uv_strerror(rc) << endl;
     return -1;
   }
 
-  if ((rc = uv_tcp_bind(&server_stream,
-                        (const struct sockaddr *)&server_address, 0)) <
+  if ((rc = uv_tcp_bind(&_server_stream, (const struct sockaddr *)&_server_addr,
+                        0)) <
       0) { // The fd gets married to associate to address. So kernel knows
            // trarffic arriving at 0.0.0.0:9090 belongs to this fd
     cout << "uv_tcp_bind failed" << endl;
     return -1;
   }
 
-  if ((rc = uv_listen((uv_stream_t *)&server_stream, N_BACKLOG,
+  if ((rc = uv_listen((uv_stream_t *)&_server_stream, N_BACKLOG,
                       on_peer_connected)) <
       0) { // Activates socket for incoming connections. Kernel starts doing TCP
            // handshakes and queueing them
@@ -261,9 +253,5 @@ int Server::run() {
   }
 
   cout << "Serving on port Test " << portNum << endl;
-  uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-
-  uv_loop_close(uv_default_loop());
-  uv_library_shutdown();
   return 0;
 }
