@@ -10,14 +10,10 @@ endif()
 
 include_directories(include)
 
-add_executable(server
- src/http.cc
+add_executable(capy
+ src/capy_main.cc
 )
-add_executable(dev
- src/dev.cc
-)
-target_link_libraries(dev uv)
-target_link_libraries(server uv)
+target_link_libraries(capy uv)
 
 # -- Tests ---------------------------------------------
 add_executable(mem_pool_test
