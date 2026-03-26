@@ -13,7 +13,10 @@ include_directories(include)
 add_executable(capy
  src/capy_main.cc
 )
-target_link_libraries(capy uv)
+ 
+add_library(server src/server.cc)
+target_link_libraries(capy server uv)
+
 
 # -- Tests ---------------------------------------------
 add_executable(mem_pool_test

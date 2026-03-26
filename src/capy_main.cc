@@ -44,7 +44,7 @@ int main() {
                           "Content-Length: 24\r\n"
                           "Connection: keep-alive\r\n"
                           "\r\n"
-                          "hall from capyJS Server\n";
+                          "halz from capyJS Server\n";
 
         res.response = msg;
         res.response_len = strlen(msg); // Can be abstracted away really.
