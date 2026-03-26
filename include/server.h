@@ -48,8 +48,7 @@ private:
   static void on_signal(uv_signal_t *handle, int signum);
   static void on_peer_connected(uv_stream_t *server_stream, int status);
   static void on_client_closed_emergency(uv_handle_t *handle);
-  // General helper functions
-  // void init_server_context(ServerContext *ctx);
+
   static void init_client_socket(ClientState *client_state);
 };
 
@@ -98,34 +97,22 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     ReadBuffer *rb = (ReadBuffer *)buf->base;
     rb->len = nread;
 
-    // client_state->global_read_buffer->release((ReadBuffer *)buf->base);
     if (client_state->write_in_flight) {
       ctx->http_ctx->release_read_buffer(rb);
-      // client_state->global_read_buffer->release(rb);
+
       uv_read_stop(client);
       return;
     }
 
     client_state->write_in_flight = true;
     client_ops::recv_new_buffer(client_state, rb);
-    // client_state->recv_new_buffer(rb);
 
     RequestObject req;
     ResponseObject res;
     client_ops::populate_request_object(client_state, req);
-    // client_state->constructRequestObject(req);
+
     client_ops::clear_buffer(client_state, ctx);
     ctx->http_ctx->invoke_function(req, res, req.verb, req.uri);
-
-    // client_state->clearBuffer();
-    // ServerContext * ctx =  (ServerContext*) uv_default_loop()->data;
-    // auto routes = ctx->routes_;
-    // auto it = routes.find({req.verb, req.uri});
-    // if (it != routes.end()) {
-    //     it->second(req, res);
-    // } else {
-    //     // TODO: Add handling for route-not-found, or throw an exception
-    // }
 
     uv_buf_t buff = uv_buf_init((char *)res.response, res.response_len);
     uv_write_t *write_handle = &client_state->write_handle;
@@ -148,11 +135,8 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
   } else {
-    // client_state->clearBuffer();
     ctx->http_ctx->release_read_buffer((ReadBuffer *)buf->base);
-    // client_state->global_read_buffer->release((ReadBuffer *)buf->base);
 
-    // Clsoe
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
@@ -276,13 +260,10 @@ int Server::run() {
     cout << "uv listen failed " << uv_strerror(rc) << endl;
   }
 
-// uv_loop_t* loop = uv_default_loop();
-   // loop->data = &ctx;
+  cout << "Serving on port Test " << portNum << endl;
+  uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
-    cout << "Serving on port Test " << portNum << endl;
-    uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-
-    uv_loop_close(uv_default_loop());
-    uv_library_shutdown();
+  uv_loop_close(uv_default_loop());
+  uv_library_shutdown();
   return 0;
 }
