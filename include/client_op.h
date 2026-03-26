@@ -3,7 +3,7 @@
 #include "runtime_context.h"
 namespace client_ops {
 
-void recv_new_buffer(ClientState *client, ReadBuffer *buff) {
+inline void recv_new_buffer(ClientState *client, ReadBuffer *buff) {
   if (buff != nullptr && client != nullptr) {
     client->recv_len += buff->len;
     if (client->recv_head == nullptr) {
@@ -16,7 +16,7 @@ void recv_new_buffer(ClientState *client, ReadBuffer *buff) {
   }
 }
 
-void clear_buffer(ClientState *client, RuntimeContext *ctx) {
+inline void clear_buffer(ClientState *client, RuntimeContext *ctx) {
   if (client == nullptr) {
     return;
   }
@@ -34,10 +34,10 @@ void clear_buffer(ClientState *client, RuntimeContext *ctx) {
   client->recv_tail = nullptr;
 }
 
-int get_recv_packet_len(ClientState *client) { return client->recv_len; }
-int get_recv_packet_count(ClientState *client) { return client->recv_count; }
+inline int get_recv_packet_len(ClientState *client) { return client->recv_len; }
+inline int get_recv_packet_count(ClientState *client) { return client->recv_count; }
 
-void print_recv_buffer(ClientState *client) {
+inline void print_recv_buffer(ClientState *client) {
   ReadBuffer *wh = client->recv_head;
   char recv_buffer[client->recv_len + 1];
   size_t offset = 0;
@@ -54,7 +54,7 @@ void print_recv_buffer(ClientState *client) {
 
 // For HTTP/1.1 Request/Response objects. Stubbing for now untill we add llhttp
 // in
-void populate_request_object(ClientState *client, RequestObject &req) {
+inline void populate_request_object(ClientState *client, RequestObject &req) {
   memcpy(req.verb, "GET", 3);
   memcpy(req.uri, "/hello", 6);
   req.verb[3] = '\0';
