@@ -4,6 +4,7 @@
 #include "runtime_context.h"
 #include "uv.h"
 
+class RuntimeContext;
 // Below can probably become variable params/config object
 #define N_BACKLOG 10
 #define MEM_POOL_SIZE 10000
@@ -20,12 +21,21 @@ using namespace std; // get rid of this when we add an actual logger to the
 // under the hood Actually, let's just do it right and get it over with
 class Server {
 public:
+  explicit Server();
   explicit Server(int portNum, RuntimeContext *env);
   explicit Server(int portNum, const char *portAddr); // More options later
   void registerFuncHandler(const char *method, const char *uri,
                            Handler handler);
 
   int run();
+
+  void setEnv(RuntimeContext *env) {
+    this->_env = env;
+  }
+
+  void setPortNum(int portNum) {
+    this->portNum = portNum;
+  }
 
 private:
   RuntimeContext *_env;

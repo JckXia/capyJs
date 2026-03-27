@@ -107,7 +107,8 @@ void setup_http_response_class(JSContext *ctx) {
 // ############### Server #################### //
 static void server_finalizer(JSRuntime *rt, JSValue val) {
   Server *server = (Server *)JS_GetOpaque(val, server_class_id);
-  delete server;
+  RuntimeContext * env = (RuntimeContext*) JS_GetRuntimeOpaque(rt);
+  env->server_pools->release(server);
 }
 
 struct JSClassDef server_class_def = {
@@ -173,9 +174,13 @@ static JSValue server_constructor(JSContext* ctx, JSValueConst new_target,
     int32_t port;
     JS_ToInt32(ctx, &port, argv[0]);
 
-    Server* server = new Server(port, env);
-    JS_SetOpaque(obj, server);
+    Server* server = env->server_pools->acquire();
+    server->setPortNum(port);
+    server->setEnv(env);
     
+ 
+    JS_SetOpaque(obj, server);
+ 
     return obj;
 }
 
@@ -313,6 +318,7 @@ int main(int argc, char **argv) {
   env.loop->data = &env;
   env.js_env = rt;
   env.http_ctx = &http_context;
+  env.server_pools = new MemPool<Server>(3);
   JS_SetRuntimeOpaque(rt, &env);
 
   // ################### Wire built-in libraries into JS engine ######################### //
@@ -336,7 +342,9 @@ int main(int argc, char **argv) {
   for(JSValue v : http_context.registerd_cb) {
     JS_FreeValue(ctx, v);
   }
+ 
   JS_FreeContext(ctx);
   JS_FreeRuntime(rt);
+ 
   uv_library_shutdown();
 }
