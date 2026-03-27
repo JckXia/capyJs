@@ -4,6 +4,7 @@
 #include "client_op.h"
 #include <map>
 
+Server::Server() {}
 void Server::init_client_socket(ClientState *client_state) {
   uv_tcp_t *client_sock = &client_state->socket;
   client_sock->data = client_state;

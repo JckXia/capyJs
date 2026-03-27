@@ -8,7 +8,7 @@
 
 using Handler = std::function<void(RequestObject &, ResponseObject &)>;
 struct HttpContext {
-  std::vector<JSValue> registerd_cb;
+  std::vector<JSValue> registerd_cb; 
   MemPool<uv_tcp_t> *emergency_handles;
   MemPool<ClientState> *connection_pool;
   MemPool<ReadBuffer> *read_buffer_pool;
