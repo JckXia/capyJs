@@ -45,6 +45,7 @@ add_executable(capy
  src/builtins/builtins.cc
  src/builtins/console.cc
  src/builtins/request.cc
+ src/builtins/response.cc
 )
  
 add_library(server src/server.cc)

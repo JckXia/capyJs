@@ -2,11 +2,12 @@
 #include "quickjs.h"
 #include "builtins/console.h"
 #include "builtins/request.h"
+#include "builtins/response.h"
 // Single entry point
 void setup_all_builtins(JSContext* ctx);
 
 
-extern JSClassID consoles_class_id;
+// extern JSClassID consoles_class_id;
 // extern JSClassID request_class_id;
 // extern JSClassID server_class_id;
 // extern JSClassID request_class_id;

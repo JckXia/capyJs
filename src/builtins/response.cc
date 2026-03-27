@@ -1,8 +1,9 @@
 #include "builtins/response.h"
+#include "http_message.h"
 static JSClassDef response_class_def = {
     .class_name = "Response"
 };   
-
+JSClassID response_class_id;
 static JSValue response_send(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst* argv)  {
     ResponseObject* res = (ResponseObject*)JS_GetOpaque2(ctx, this_val, response_class_id);
     if (!res) return JS_EXCEPTION;
