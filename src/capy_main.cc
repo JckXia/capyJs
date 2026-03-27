@@ -3,33 +3,8 @@
 #include "quickjs.h"
 #include "server.h"
 #include "uv.h"
+#include "util.h"
 #include <iostream>
-
-static char *read_file(const char *filename, size_t *out_len) {
-  FILE *f = fopen(filename, "rb");
-  if (!f) {
-    fprintf(stderr, "Error: cannot open '%s'\n", filename);
-    return nullptr;
-  }
-
-  fseek(f, 0, SEEK_END);
-  size_t len = ftell(f);
-  fseek(f, 0, SEEK_SET);
-
-  char *buf = (char *)malloc(len + 1);
-  if (!buf) {
-    fclose(f);
-    return nullptr;
-  }
-
-  fread(buf, 1, len, f);
-  buf[len] = '\0';
-  fclose(f);
-
-  if (out_len)
-    *out_len = len;
-  return buf;
-}
 
 // Equivalent of Node's built-in modules
 void init_http_ctx(HttpContext &ctx) {

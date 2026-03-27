@@ -42,6 +42,7 @@ include_directories(include)
 
 add_executable(capy
  src/capy_main.cc
+ src/util.cc
  src/builtins/builtins.cc
  src/builtins/console.cc
  src/builtins/request.cc
