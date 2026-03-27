@@ -41,7 +41,6 @@ private:
   static void on_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
                                  uv_buf_t *buf);
   static void on_client_closed_cb(uv_handle_t *handle);
-  static void on_signal(uv_signal_t *handle, int signum);
   static void on_peer_connected(uv_stream_t *server_stream, int status);
   static void on_client_closed_emergency(uv_handle_t *handle);
 

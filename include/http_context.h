@@ -2,17 +2,23 @@
 #include "client_state.h"
 #include "mem_pool.h"
 #include <functional>
+#include "quickjs.h"
+#include <vector>
 #include <map>
 
 using Handler = std::function<void(RequestObject &, ResponseObject &)>;
 struct HttpContext {
+  std::vector<JSValue> registerd_cb;
   MemPool<uv_tcp_t> *emergency_handles;
   MemPool<ClientState> *connection_pool;
   MemPool<ReadBuffer> *read_buffer_pool;
   std::map<std::pair<std::string, std::string>, Handler> routes_;
   ~HttpContext() {
+    
+    emergency_handles->verify_no_leaks();
     connection_pool->verify_no_leaks();
     read_buffer_pool->verify_no_leaks();
+    delete emergency_handles;
     delete connection_pool;
     delete read_buffer_pool;
   }

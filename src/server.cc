@@ -1,9 +1,8 @@
 #include "server.h"
-#include <cstring>
-// #include <functional>
+#include <string>
 
-#include <map>
 #include "client_op.h"
+#include <map>
 
 void Server::init_client_socket(ClientState *client_state) {
   uv_tcp_t *client_sock = &client_state->socket;
@@ -15,6 +14,30 @@ void Server::init_client_socket(ClientState *client_state) {
     return;
   }
 }
+
+// FWIW i'm fumbling around with text repsonses...need to get this worked out
+void add_http_header_to_plain_txt_response(ResponseObject &res) {
+const char* body = res.response_buf;  // <-- Use the buffer!
+    size_t body_len = strlen(res.response_buf);  // <-- Or use response_len if you trust it
+
+    char temp[4096];
+    snprintf(temp, sizeof(temp),
+             "HTTP/1.1 200 OK\r\n"
+             "Content-Type: text/plain\r\n"
+             "Content-Length: %zu\r\n"
+             "Connection: keep-alive\r\n"
+             "\r\n"
+             "%s",
+             body_len, body);
+
+    // Copy back
+    strncpy(res.response_buf, temp, sizeof(res.response_buf));
+    res.response = res.response_buf;
+    res.response_len = strlen(res.response_buf);
+}
+
+ 
+
 
 void Server::on_client_closed_emergency(uv_handle_t *handle) {
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
@@ -62,11 +85,12 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
 
     RequestObject req;
     ResponseObject res;
+    char response_buf[2048];
     client_ops::populate_request_object(client_state, req);
 
     client_ops::clear_buffer(client_state, ctx);
     ctx->http_ctx->invoke_function(req, res, req.verb, req.uri);
-
+    add_http_header_to_plain_txt_response(res);
     uv_buf_t buff = uv_buf_init((char *)res.response, res.response_len);
     uv_write_t *write_handle = &client_state->write_handle;
     write_handle->data = client_state;
@@ -109,13 +133,6 @@ void Server::on_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
     buf->base = nullptr;
     buf->len = 0;
   }
-}
-
-// Move signal handlers to an a concern handled by the runtime itself
-void Server::on_signal(uv_signal_t *handle, int signum) {
-  uv_signal_stop(handle);
-  uv_close((uv_handle_t *)handle, NULL);
-  uv_stop(uv_default_loop());
 }
 
 void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
@@ -204,6 +221,5 @@ int Server::run() {
     cout << "uv listen failed " << uv_strerror(rc) << endl;
   }
 
-  cout << "Serving on port Test " << portNum << endl;
   return 0;
 }
