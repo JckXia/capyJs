@@ -33,7 +33,6 @@ const char* body = res.response_buf;  // <-- Use the buffer!
 
     // Copy back
     strncpy(res.response_buf, temp, sizeof(res.response_buf));
-    res.response = res.response_buf;
     res.response_len = strlen(res.response_buf);
 }
 
@@ -92,7 +91,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     client_ops::clear_buffer(client_state, ctx);
     ctx->http_ctx->invoke_function(req, res, req.verb, req.uri);
     add_http_header_to_plain_txt_response(res);
-    uv_buf_t buff = uv_buf_init((char *)res.response, res.response_len);
+    uv_buf_t buff = uv_buf_init((char *)res.response_buf, res.response_len);
     uv_write_t *write_handle = &client_state->write_handle;
     write_handle->data = client_state;
     int rc;
