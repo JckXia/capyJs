@@ -1,11 +1,11 @@
 #pragma once
-#include "quickjs.h"
 #include "builtins/console.h"
 #include "builtins/request.h"
 #include "builtins/response.h"
+#include "builtins/server_js.h"
+#include "quickjs.h"
 // Single entry point
-void setup_all_builtins(JSContext* ctx);
-
+void setup_all_builtins(JSContext *ctx);
 
 // extern JSClassID consoles_class_id;
 // extern JSClassID request_class_id;
