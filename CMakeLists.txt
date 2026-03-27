@@ -37,10 +37,14 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(quickjs PRIVATE -w)
 endif()
 
+include_directories(include/builtins)
 include_directories(include)
 
 add_executable(capy
  src/capy_main.cc
+ src/builtins/builtins.cc
+ src/builtins/console.cc
+ src/builtins/request.cc
 )
  
 add_library(server src/server.cc)

@@ -2,6 +2,7 @@
 #include "quickjs.h"
 #include "server.h"
 #include "uv.h"
+#include "builtins/builtins.h"
 #include <iostream>
 
 static char *read_file(const char *filename, size_t *out_len) {
@@ -55,17 +56,7 @@ void init_http_ctx(HttpContext &ctx) {
     JS_FreeValue(ctx, exc);
 }
 static JSClassID server_class_id;
-static JSClassID request_class_id;
 static JSClassID response_class_id;
-
-void setup_http_request_class(JSContext *ctx) {
-    static JSClassDef request_class_def = {
-    .class_name = "Request"
-};   
-    JSRuntime *rt = JS_GetRuntime(ctx);
-    JS_NewClassID(&request_class_id);
-    JS_NewClass(rt, request_class_id, &request_class_def);
-}
 
 static JSValue response_send(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst* argv)  {
     ResponseObject* res = (ResponseObject*)JS_GetOpaque2(ctx, this_val, response_class_id);
@@ -265,25 +256,7 @@ void setup_console(JSContext *ctx) {
 }
  
 
-
-void runQuickJs(char *code, size_t len) {
-  JSRuntime *rt = JS_NewRuntime();
-  JSContext *ctx = JS_NewContext(rt);
- // setup_point_class(ctx);
-  setup_console(ctx);
-  // setup_heavy_compute(ctx);
-  JSValue result = JS_Eval(ctx, code, len,
-                           "<input>", // filename for errors
-                           JS_EVAL_TYPE_GLOBAL);
-  int32_t num;
-  JS_ToInt32(ctx, &num, result);
-  printf("Result: %d\n", num); // prints 3
-  JS_FreeValue(ctx, result);
-  JS_FreeContext(ctx);
-  JS_FreeRuntime(rt);
-}
-
-int main(int argc, char **argv) {
+ int main(int argc, char **argv) {
 
   // #################### Read input file #############//
   if (argc < 2) {
@@ -322,8 +295,9 @@ int main(int argc, char **argv) {
   JS_SetRuntimeOpaque(rt, &env);
 
   // ################### Wire built-in libraries into JS engine ######################### //
-  setup_console(ctx);
-  setup_http_request_class(ctx);
+ // setup_console(ctx);
+  setup_all_builtins(ctx);
+ 
   setup_http_response_class(ctx);
   setup_server_class(ctx);
   // ###################### Start JS isloate ################### //
