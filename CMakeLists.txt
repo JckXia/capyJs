@@ -43,11 +43,13 @@ include_directories(include)
 add_executable(capy
  src/capy_main.cc
  src/util.cc
+ src/timer_util.cc
  src/builtins/builtins.cc
  src/builtins/console.cc
  src/builtins/request.cc
  src/builtins/response.cc
  src/builtins/server_js.cc
+ src/builtins/timer.cc
 )
  
 add_library(server src/server.cc)

@@ -68,12 +68,17 @@ int main(int argc, char **argv) {
   init_http_ctx(http_context); // TODO: Might need to move httpContext to
                                // heap....Rasp Pi stack is pretty small...
   // ################# Wire Libuv and QuickJS into RuntimeContext  ######## //
+  TimerContext timer_ctx;
+  IdGenerator id_gen;
   RuntimeContext env;
   env.loop = uv_default_loop();
   env.loop->data = &env;
   env.js_env = rt;
   env.http_ctx = &http_context;
+  env.timer_ctx = &timer_ctx;
   env.server_pools = new MemPool<Server>(3);
+  env.id_generator = &id_gen;
+  
   JS_SetRuntimeOpaque(rt, &env);
 
   // ################### Wire built-in libraries into JS engine
@@ -89,15 +94,20 @@ int main(int argc, char **argv) {
   }
 
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-  uv_loop_close(uv_default_loop());
+  
 
   free(code); // Well this is annoying.
   for (JSValue v : http_context.registerd_cb) {
     JS_FreeValue(ctx, v);
   }
 
+  // Free Timer callbacks
+  for (JSValue v : timer_ctx.registered_cb) {
+    JS_FreeValue(ctx, v);
+  }
+
   JS_FreeContext(ctx);
   JS_FreeRuntime(rt);
-
+  uv_loop_close(uv_default_loop());
   uv_library_shutdown();
 }

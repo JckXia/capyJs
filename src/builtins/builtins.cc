@@ -5,4 +5,8 @@ void setup_all_builtins(JSContext *ctx) {
   setup_request_class(ctx);
   setup_response_class(ctx);
   setup_server_class(ctx);
+  setup_set_timeout(ctx);
+  setup_set_immediate(ctx);
+  setup_set_interval(ctx);
+  setup_clear_interval(ctx);
 }
