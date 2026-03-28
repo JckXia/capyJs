@@ -48,6 +48,7 @@ add_executable(capy
  src/builtins/request.cc
  src/builtins/response.cc
  src/builtins/server_js.cc
+ src/builtins/timer.cc
 )
  
 add_library(server src/server.cc)
