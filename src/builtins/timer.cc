@@ -1,7 +1,7 @@
 #include "builtins/timer.h"
 #include "uv.h"
 #include "runtime_context.h"
-#include <ctime>
+#include "timer_util.h"
 
 
 struct Libuv_Cb {
@@ -72,8 +72,7 @@ static JSValue SetIntervalFunc(JSContext * ctx, JSValueConst this_val, int argc,
     uv_timer_start(handle, set_interval_libuv_cb, delay, delay);
 
 
-    int timerId = randomInt(1,1000);
- 
+    int timerId = env->id_generator->generate(); 
     env->timer_ctx->registered_interval_cb[timerId] = handle;
 
     return JS_NewInt32(ctx, timerId);
@@ -90,7 +89,6 @@ static JSValue clearIntervalFunc(JSContext * ctx, JSValueConst this_val, int arg
 }
 
 void setup_set_timeout(JSContext * ctx) {
- 
  JSValue global= JS_GetGlobalObject(ctx);
  JSValue func = JS_NewCFunction(ctx, SetTimeOutFunc,"setTimeout" ,2);
  JS_SetPropertyStr(ctx, global, "setTimeout", func);
@@ -102,7 +100,6 @@ void setup_set_immediate(JSContext *ctx) {
 }
 
 void setup_set_interval(JSContext* ctx) {
- srand(time(nullptr)); // TODO: Move this into the util function 
  JSValue global= JS_GetGlobalObject(ctx);
  JSValue func = JS_NewCFunction(ctx, SetIntervalFunc,"setInterval" ,2);
  JS_SetPropertyStr(ctx, global, "setInterval", func);
