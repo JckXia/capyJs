@@ -105,7 +105,6 @@ int main(int argc, char **argv) {
   for (JSValue v : timer_ctx.registered_cb) {
     JS_FreeValue(ctx, v);
   }
-
   JS_FreeContext(ctx);
   JS_FreeRuntime(rt);
   uv_loop_close(uv_default_loop());

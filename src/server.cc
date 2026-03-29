@@ -18,23 +18,41 @@ void Server::init_client_socket(ClientState *client_state) {
 
 // FWIW i'm fumbling around with text repsonses...need to get this worked out
 void add_http_header_to_plain_txt_response(ResponseObject &res) {
-  const char *body = res.response_buf; // <-- Use the buffer!
-  size_t body_len =
-      strlen(res.response_buf); // <-- Or use response_len if you trust it
+    const char *body = res.response_buf;
+    size_t body_len = res.response_len;
+    char temp[4096];
+    size_t offset = 0;
 
-  char temp[4096];
-  snprintf(temp, sizeof(temp),
-           "HTTP/1.1 200 OK\r\n"
-           "Content-Type: text/plain\r\n"
-           "Content-Length: %zu\r\n"
-           "Connection: keep-alive\r\n"
-           "\r\n"
-           "%s",
-           body_len, body);
+    // Status line
+    offset += snprintf(temp + offset, sizeof(temp) - offset, "HTTP/1.1 200 OK\r\n");
 
-  // Copy back
-  strncpy(res.response_buf, temp, sizeof(res.response_buf));
-  res.response_len = strlen(res.response_buf);
+    if (!res.headers.empty()) {
+        // Add headers from the map
+        for (const auto &kv : res.headers) {
+            offset += snprintf(temp + offset, sizeof(temp) - offset,
+                               "%s: %s\r\n",
+                               kv.first,
+                               kv.second);
+        }
+    } else {
+         
+        offset += snprintf(temp + offset, sizeof(temp) - offset, "Content-Type: text/plain\r\n");
+    }
+
+    // Mandatory headers
+    offset += snprintf(temp + offset, sizeof(temp) - offset,
+                       "Content-Length: %zu\r\n"
+                       "Connection: keep-alive\r\n"
+                       "\r\n", body_len);
+
+    // Append body
+    snprintf(temp + offset, sizeof(temp) - offset, "%s", body);
+
+    // Copy back to response_buf
+    strncpy(res.response_buf, temp, sizeof(res.response_buf));
+    // Ensure null termination in case of truncation
+    res.response_buf[sizeof(res.response_buf) - 1] = '\0';
+    res.response_len = strlen(res.response_buf);
 }
 
 void Server::on_client_closed_emergency(uv_handle_t *handle) {
@@ -105,12 +123,9 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
       return;
     }
 
-    std::cout << pret << std::endl;
     RequestObject req;
     ResponseObject res;
     char response_buf[2048];
-
- 
 
     memcpy(req.verb, method, method_len);
     memcpy(req.uri, path, path_len);
@@ -121,6 +136,12 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     client_ops::clear_buffer(client_state, ctx);
     ctx->http_ctx->invoke_function(req, res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS" "INVOKE_FAILED" "ROUTE_NOT_FOUND" 
     add_http_header_to_plain_txt_response(res);
+    // This is ugly and terrible. We need to rethink alloc strategies and error handling ASAP
+    for (auto& [key, value] : res.headers) {
+      free((void *)key);   // free memory pointed to by key
+      free((void *)value); // free memory pointed to by value
+    }
+
     uv_buf_t buff = uv_buf_init((char *)res.response_buf, res.response_len);
     uv_write_t *write_handle = &client_state->write_handle;
     write_handle->data = client_state;
