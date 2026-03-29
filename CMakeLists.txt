@@ -8,6 +8,13 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     add_compile_options(-O2)
 endif()
 
+set(PICO_HTTP_DIR ${CMAKE_SOURCE_DIR}/deps/picohttpparser)
+add_library(picohttp STATIC 
+   ${PICO_HTTP_DIR}/picohttpparser.c
+)
+target_include_directories(picohttp PUBLIC ${PICO_HTTP_DIR})
+# add_library(http_parser STATIC deps/http-parser/http_parser.c)
+# target_include_directories(http_parser PUBLIC deps/http-parser)
 #----------------------
 # libuv (vendored)
 #----------------------
@@ -54,8 +61,8 @@ add_executable(capy
  
 add_library(server src/server.cc)
 target_include_directories(server PRIVATE ${QJS_DIR})  # ← add this
-target_link_libraries(server uv_a quickjs)
-target_link_libraries(capy server uv_a quickjs)
+target_link_libraries(server uv_a quickjs picohttp)
+target_link_libraries(capy server uv_a quickjs picohttp)
 
 
 # -- Tests ---------------------------------------------
@@ -71,4 +78,9 @@ add_executable(client_state_test
     tests/client_state_test.cc
 )
 
+add_executable(http_parser_test
+    tests/http_parser_test.cc
+)
+
+target_link_libraries(http_parser_test picohttp)
 target_link_libraries(client_state_test uv quickjs)
