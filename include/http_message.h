@@ -5,6 +5,6 @@ struct RequestObject {
 };
 
 struct ResponseObject {
-  size_t response_len;
+  size_t response_len = 0;
   char response_buf[2048]; 
 };

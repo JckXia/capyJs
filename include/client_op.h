@@ -49,7 +49,6 @@ inline void print_recv_buffer(ClientState *client) {
   }
 
   recv_buffer[client->recv_len] = '\0';
-  std::cout << recv_buffer << std::endl;
 }
 
 // For HTTP/1.1 Request/Response objects. Stubbing for now untill we add llhttp
@@ -59,6 +58,17 @@ inline void populate_request_object(ClientState *client, RequestObject &req) {
   memcpy(req.uri, "/hello", 6);
   req.verb[3] = '\0';
   req.uri[6] = '\0';
+}
+
+void flatten_buffer(ClientState * clientState, char* buff) {
+  ReadBuffer * wh = clientState->recv_head;
+  size_t offset = 0;
+
+  while (wh) {
+    memcpy(buff + offset, wh->read_buffer, wh->len);
+    offset += wh->len;
+    wh = wh->next;
+  }
 }
 
 } // namespace client_ops

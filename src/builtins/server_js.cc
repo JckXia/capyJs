@@ -52,7 +52,7 @@ static JSValue server_listen(JSContext *ctx, JSValueConst this_val, int argc,
 
   int32_t port;
   JS_ToInt32(ctx, &port, argv[0]);
-
+  server->setPortNum(port);
   // Optional callback
   if (argc > 1 && JS_IsFunction(ctx, argv[1])) {
     JSValue ret = JS_Call(ctx, argv[1], JS_UNDEFINED, 0, nullptr);
@@ -72,11 +72,8 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
 
   JSRuntime *rt = JS_GetRuntime(ctx);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
-  int32_t port;
-  JS_ToInt32(ctx, &port, argv[0]);
 
   Server *server = env->server_pools->acquire();
-  server->setPortNum(port);
   server->setEnv(env);
 
   JS_SetOpaque(obj, server);
