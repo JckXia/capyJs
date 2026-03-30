@@ -9,4 +9,5 @@ void setup_all_builtins(JSContext *ctx) {
   setup_set_immediate(ctx);
   setup_set_interval(ctx);
   setup_clear_interval(ctx);
+  setup_fs_class(ctx);
 }

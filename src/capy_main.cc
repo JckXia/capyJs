@@ -71,6 +71,9 @@ int main(int argc, char **argv) {
   TimerContext timer_ctx;
   IdGenerator id_gen;
   RuntimeContext env;
+  FSContext fs_ctx;
+
+
   env.loop = uv_default_loop();
   env.loop->data = &env;
   env.js_env = rt;
@@ -78,6 +81,7 @@ int main(int argc, char **argv) {
   env.timer_ctx = &timer_ctx;
   env.server_pools = new MemPool<Server>(3);
   env.id_generator = &id_gen;
+  env.fs_ctx = &fs_ctx;
   
   JS_SetRuntimeOpaque(rt, &env);
 

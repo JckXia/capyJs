@@ -7,6 +7,6 @@ struct RequestObject {
 
 struct ResponseObject {
   size_t response_len = 0;
-  char response_buf[2048];
+  char response_buf[8192];
   std::map<const char *, const char *> headers;   
 };

@@ -15,6 +15,9 @@ struct ClientState {
   bool write_in_flight = false;
   ReadBuffer *recv_head;
   ReadBuffer *recv_tail;
+
+  char *pending_write_buffer; // TODO: Need to rethink this bit
+  
   size_t recv_count = 0;
   int recv_len = 0;
 
