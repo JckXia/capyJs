@@ -45,6 +45,7 @@ private:
   const char *portAddr;
 
   // libuv life cycle functions:
+  static void on_static_write_cb(uv_write_t * req, int status);
   static void on_write_cb(uv_write_t *req, int status);
   static void on_read_cb(uv_stream_t *client, ssize_t nread,
                          const uv_buf_t *buf);

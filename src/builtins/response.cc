@@ -24,6 +24,7 @@ static JSValue response_send(JSContext* ctx, JSValueConst this_val, int argc, JS
     return JS_UNDEFINED;
 }
 
+// TODO: Make the response header object setter.
 static JSValue response_set_header(JSContext* ctx, JSValueConst this_val, int argc, JSValueConst* argv)  {
     ResponseObject* res = (ResponseObject*)JS_GetOpaque2(ctx, this_val, response_class_id);
     if (!res) return JS_EXCEPTION;
@@ -31,6 +32,7 @@ static JSValue response_set_header(JSContext* ctx, JSValueConst this_val, int ar
     const char* header_key = strdup(JS_ToCString(ctx, argv[0]));
     const char* header_val = strdup(JS_ToCString(ctx, argv[1]));
     res->headers[header_key] = header_val;
+    res->header_size += strlen(header_val);
     return JS_UNDEFINED;
 }
 

@@ -92,8 +92,8 @@ static JSValue server_listen(JSContext *ctx, JSValueConst this_val, int argc,
   return JS_UNDEFINED;
 }
 
-// server.serveStatic("uri", "./index.html"). This never actually goes BACK to
-// js!! Stays in native land
+// server.serveStatic("uri", "./index.html"). This never goes back to JS land
+// TODO: Infer header type from filepath extension (.js vs .css vs .html)
 static JSValue server_serve_static(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv) {
   Server *server = (Server *)JS_GetOpaque2(ctx, this_val, server_class_id);
@@ -108,6 +108,8 @@ static JSValue server_serve_static(JSContext *ctx, JSValueConst this_val,
                               [env, fp](RequestObject &req, ResponseObject &res) {
                               MappedFile f = env->http_ctx->static_files[fp];
                               res.headers["Content-Type"] = "text/html";
+                              res.header_size += (strlen("text/html") + strlen("Content-Type"));
+                              
                               res.is_static = true;
                               res.static_data = f.data; // Zero-copy transfer
                               res.response_len = f.size;
