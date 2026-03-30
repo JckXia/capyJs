@@ -3,6 +3,7 @@
 #include "mem_pool.h"
 #include <functional>
 #include "quickjs.h"
+#include "mapped_file.h"
 #include <vector>
 #include <map>
 
@@ -12,11 +13,14 @@ struct HttpContext {
   MemPool<uv_tcp_t> *emergency_handles;
   MemPool<ClientState> *connection_pool;
   MemPool<ReadBuffer> *read_buffer_pool;
+  std::map<std::string, MappedFile> static_files;
   std::map<std::pair<std::string, std::string>, Handler> routes_;
   ~HttpContext() {
-    
+    std::cout<<"Verify emergency handle allocs and frees:===========\n";
     emergency_handles->verify_no_leaks();
+    std::cout<<"Verify connection pooling allocs and frees:===============\n";
     connection_pool->verify_no_leaks();
+    std::cout<<"Verify buffer pool allocs and frees:==============\n";
     read_buffer_pool->verify_no_leaks();
     delete emergency_handles;
     delete connection_pool;
@@ -36,7 +40,10 @@ struct HttpContext {
     }
   }
 
-  ClientState *acquire_connection() { return connection_pool->acquire(); }
+  ClientState *acquire_connection() { 
+    std::cout << "Acquiring connection object \n";
+    return connection_pool->acquire(); 
+  }
 
   void release_connection(ClientState *connection) {
     connection_pool->release(connection);

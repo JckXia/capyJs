@@ -1,1 +1,1 @@
-wrk -t12 -c10000 -d5m --latency http://127.0.0.1:9091/
+wrk -t12 -c10000 -d5m --latency http://127.0.0.1:9091/uptime

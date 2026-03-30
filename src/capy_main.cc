@@ -9,7 +9,7 @@
 // Equivalent of Node's built-in modules
 void init_http_ctx(HttpContext &ctx) {
   ctx.emergency_handles = new MemPool<uv_tcp_t>(16);
-  ctx.connection_pool = new MemPool<ClientState>(10000); // C10K configuration
+  ctx.connection_pool = new MemPool<ClientState>(3); // C10K configuration
   ctx.read_buffer_pool = new MemPool<ReadBuffer>(200);
 }
 

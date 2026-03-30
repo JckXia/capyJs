@@ -47,7 +47,6 @@ static JSValue fs_constructor(JSContext *ctx, JSValueConst new_target, int argc,
   JSValue len_val = JS_GetPropertyStr(ctx, staticFiles, "length");
   JS_ToUint32(ctx, &length, len_val);
   JS_FreeValue(ctx, len_val);
-  // JSRuntime * env = JS_GetRuntime(ctx);
    RuntimeContext *env =
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
   for (uint32_t i = 0; i < length; i++) {

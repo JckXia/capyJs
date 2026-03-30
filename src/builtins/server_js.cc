@@ -2,10 +2,39 @@
 #include "builtins.h"
 #include "quickjs.h"
 #include "server.h"
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 static void server_finalizer(JSRuntime *rt, JSValue val) {
   Server *server = (Server *)JS_GetOpaque(val, server_class_id);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
   env->server_pools->release(server);
+}
+
+MappedFile mmap_static_file(const char *path) {
+  MappedFile result = {nullptr, 0, -1};
+
+  int fd = open(path, O_RDONLY);
+  if (fd < 0)
+    return result;
+
+  struct stat st;
+  if (fstat(fd, &st) < 0) {
+    close(fd);
+    return result;
+  }
+
+  void *mapped = mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (mapped == MAP_FAILED) {
+    close(fd);
+    return result;
+  }
+
+  result.data = (char *)mapped;
+  result.size = st.st_size;
+  result.fd = fd;
+  return result;
 }
 
 struct JSClassDef server_class_def = {
@@ -63,12 +92,36 @@ static JSValue server_listen(JSContext *ctx, JSValueConst this_val, int argc,
   return JS_UNDEFINED;
 }
 
+// server.serveStatic("uri", "./index.html"). This never actually goes BACK to
+// js!! Stays in native land
+static JSValue server_serve_static(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv) {
+  Server *server = (Server *)JS_GetOpaque2(ctx, this_val, server_class_id);
+  if (!server)
+    return JS_EXCEPTION;
+
+  const char *uri = JS_ToCString(ctx, argv[0]);
+  const char *fp = JS_ToCString(ctx, argv[1]);
+  RuntimeContext *env =
+      (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
+  server->registerFuncHandler("GET", uri,
+                              [env, fp](RequestObject &req, ResponseObject &res) {
+                              MappedFile f = env->http_ctx->static_files[fp];
+                              res.headers["Content-Type"] = "text/html";
+                              res.is_static = true;
+                              res.static_data = f.data; // Zero-copy transfer
+                              res.response_len = f.size;
+                            });
+
+  return JS_UNDEFINED;
+}
+
 static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
                                   int argc, JSValueConst *argv) {
 
-  JSValue obj = JS_NewObjectClass(ctx, server_class_id);
-  if (JS_IsException(obj))
-    return obj;
+  JSValue server_obj = JS_NewObjectClass(ctx, server_class_id);
+  if (JS_IsException(server_obj))
+    return server_obj;
 
   JSRuntime *rt = JS_GetRuntime(ctx);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
@@ -76,9 +129,36 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
   Server *server = env->server_pools->acquire();
   server->setEnv(env);
 
-  JS_SetOpaque(obj, server);
 
-  return obj;
+  JSValue staticFiles = JS_GetPropertyStr(ctx, argv[0], "staticFiles");
+  int is_array = JS_IsArray(ctx, staticFiles);
+
+  if (!is_array) {
+    // TODO error handling
+    return JS_UNDEFINED;
+  }
+
+  uint32_t length;
+  JSValue len_val = JS_GetPropertyStr(ctx, staticFiles, "length");
+  JS_ToUint32(ctx, &length, len_val);
+  JS_FreeValue(ctx, len_val);
+ 
+  for (uint32_t i = 0; i < length; i++) {
+    JSValue elem = JS_GetPropertyUint32(ctx, staticFiles, i);
+
+    const char *str;
+    size_t len;
+
+    str = JS_ToCStringLen(ctx, &len, elem);
+ 
+    env->http_ctx->static_files[str] = mmap_static_file(str); 
+    JS_FreeValue(ctx, elem);
+  }
+
+  JS_FreeValue(ctx, staticFiles);
+  JS_SetOpaque(server_obj, server);
+
+  return server_obj;
 }
 
 void setup_server_class(JSContext *ctx) {
@@ -90,6 +170,8 @@ void setup_server_class(JSContext *ctx) {
                     JS_NewCFunction(ctx, register_get_url, "get", 2));
   JS_SetPropertyStr(ctx, server_proto, "listen",
                     JS_NewCFunction(ctx, server_listen, "listen", 2));
+  JS_SetPropertyStr(ctx, server_proto, "serveStatic",
+                    JS_NewCFunction(ctx, server_serve_static, "serveStatic", 2));
   JS_SetClassProto(ctx, server_class_id, server_proto);
   JSValue global = JS_GetGlobalObject(ctx);
   JSValue ctor = JS_NewCFunction2(ctx, server_constructor, "Server", 0,
