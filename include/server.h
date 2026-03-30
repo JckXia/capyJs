@@ -7,7 +7,7 @@
 class RuntimeContext;
 // Below can probably become variable params/config object
 #define N_BACKLOG 10
-#define MEM_POOL_SIZE 10000
+#define MEM_POOL_SIZE 3
 #define READ_BUFFER_POOL_SIZE 200
 
 using namespace std; // get rid of this when we add an actual logger to the
@@ -45,6 +45,7 @@ private:
   const char *portAddr;
 
   // libuv life cycle functions:
+  static void on_static_write_cb(uv_write_t * req, int status);
   static void on_write_cb(uv_write_t *req, int status);
   static void on_read_cb(uv_stream_t *client, ssize_t nread,
                          const uv_buf_t *buf);

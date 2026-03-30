@@ -9,7 +9,7 @@
 // Equivalent of Node's built-in modules
 void init_http_ctx(HttpContext &ctx) {
   ctx.emergency_handles = new MemPool<uv_tcp_t>(16);
-  ctx.connection_pool = new MemPool<ClientState>(10000); // C10K configuration
+  ctx.connection_pool = new MemPool<ClientState>(3); // C10K configuration
   ctx.read_buffer_pool = new MemPool<ReadBuffer>(200);
 }
 
@@ -71,6 +71,9 @@ int main(int argc, char **argv) {
   TimerContext timer_ctx;
   IdGenerator id_gen;
   RuntimeContext env;
+  FSContext fs_ctx;
+
+
   env.loop = uv_default_loop();
   env.loop->data = &env;
   env.js_env = rt;
@@ -78,6 +81,7 @@ int main(int argc, char **argv) {
   env.timer_ctx = &timer_ctx;
   env.server_pools = new MemPool<Server>(3);
   env.id_generator = &id_gen;
+  env.fs_ctx = &fs_ctx;
   
   JS_SetRuntimeOpaque(rt, &env);
 
@@ -105,7 +109,6 @@ int main(int argc, char **argv) {
   for (JSValue v : timer_ctx.registered_cb) {
     JS_FreeValue(ctx, v);
   }
-
   JS_FreeContext(ctx);
   JS_FreeRuntime(rt);
   uv_loop_close(uv_default_loop());
