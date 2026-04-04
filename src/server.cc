@@ -70,7 +70,7 @@ void Server::on_client_closed_cb(uv_handle_t *handle) {
   uv_tcp_t *client_sock = (uv_tcp_t *)handle;
   ClientState *client = (ClientState *)client_sock->data;
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
-  ctx->http_ctx->release_connection(client);
+  ctx->allocator->release(client);
 }
 
 void Server::on_write_cb(uv_write_t *req, int status) {
@@ -108,7 +108,7 @@ int build_headers_buf(char *header_buf, size_t header_len,
   }
 
   if (res.header_size == 0) {
-  int ret = snprintf(header_buf, header_len,
+    int ret = snprintf(header_buf, header_len,
                        "HTTP/1.1 200 OK\r\n"
                        "Content-Type: text/plain\r\n"
                        "Content-Length: %zu\r\n"
@@ -122,15 +122,15 @@ int build_headers_buf(char *header_buf, size_t header_len,
 
   // Status line + standard headers (no terminating \r\n yet)
   offset += snprintf(header_buf, header_len,
-           "HTTP/1.1 200 OK\r\n"
-           "Content-Length: %zu\r\n"
-           "Connection: keep-alive\r\n",
-           res.response_len);
+                     "HTTP/1.1 200 OK\r\n"
+                     "Content-Length: %zu\r\n"
+                     "Connection: keep-alive\r\n",
+                     res.response_len);
 
   // Append custom headers
   for (auto &[header_key, header_value] : res.headers) {
-    offset += snprintf(header_buf + offset, header_len - offset, 
-                       "%s: %s\r\n", header_key, header_value);
+    offset += snprintf(header_buf + offset, header_len - offset, "%s: %s\r\n",
+                       header_key, header_value);
   }
 
   // NOW end the headers
@@ -210,36 +210,38 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     ctx->http_ctx->invoke_function(
         req, res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS"
                                       // "INVOKE_FAILED" "ROUTE_NOT_FOUND"
-    
+
     size_t header_len = res.header_size + 256;
     char header_buf[header_len]; // 256 default headers
     header_len = build_headers_buf(header_buf, header_len, res);
-          uv_write_t *write_handle = &client_state->write_handle;
+    uv_write_t *write_handle = &client_state->write_handle;
     write_handle->data = client_state;
-    
-    if(res.is_static) {
+
+    if (res.is_static) {
       uv_buf_t bufs[2] = {uv_buf_init(header_buf, header_len),
                           uv_buf_init(res.static_data, res.response_len)};
- 
+
       int rc;
-      if ((rc = uv_write(write_handle, client, bufs, 2, on_static_write_cb)) < 0) {
+      if ((rc = uv_write(write_handle, client, bufs, 2, on_static_write_cb)) <
+          0) {
         std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
       }
     } else {
-      
+
       client_state->pending_write_buffer = (char *)malloc(res.response_len);
       memcpy(client_state->pending_write_buffer, res.response_buf,
              res.response_len);
 
-      uv_buf_t bufs[2] = {uv_buf_init(header_buf, header_len),
-                          uv_buf_init(client_state->pending_write_buffer, res.response_len)};
- 
+      uv_buf_t bufs[2] = {
+          uv_buf_init(header_buf, header_len),
+          uv_buf_init(client_state->pending_write_buffer, res.response_len)};
+
       int rc;
       if ((rc = uv_write(write_handle, client, bufs, 2, on_write_cb)) < 0) {
         std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
       }
     }
-    
+
   } else if (nread == UV_EOF) {
 
     ctx->http_ctx->release_read_buffer((ReadBuffer *)buf->base);
@@ -284,8 +286,10 @@ void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
   int rc;
 
   RuntimeContext *env = (RuntimeContext *)server_stream->loop->data;
-  ClientState *client = env->http_ctx->acquire_connection();
-  // env->http_ctx->connection_pool->dump_raw_state();
+  // ClientState *client = env->http_ctx->acquire_connection();
+  ClientState *client =
+      (ClientState *)env->allocator->alloc(sizeof(ClientState));
+
   if (client == nullptr) {
     std::cerr << "Connection pool is exhausted!\n";
     uv_tcp_t *temp_socket = env->http_ctx->acquire_emergency_handle();

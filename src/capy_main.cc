@@ -2,8 +2,8 @@
 #include "mem_pool.h"
 #include "quickjs.h"
 #include "server.h"
-#include "uv.h"
 #include "util.h"
+#include "uv.h"
 #include <iostream>
 
 // Equivalent of Node's built-in modules
@@ -35,6 +35,26 @@ void on_signal(uv_signal_t *handle, int signum) {
   uv_signal_stop(handle);
   uv_close((uv_handle_t *)handle, NULL);
   uv_stop(uv_default_loop());
+}
+
+void tear_down_runtime_env(RuntimeContext *env, JSContext *ctx) {
+  JSRuntime *rt = env->js_env;
+  for (JSValue v : env->http_ctx->registerd_cb) {
+    JS_FreeValue(ctx, v);
+  }
+
+  // Free Timer callbacks
+  for (JSValue v : env->timer_ctx->registered_cb) {
+    JS_FreeValue(ctx, v);
+  }
+
+  JS_FreeContext(ctx);
+  JS_FreeRuntime(rt);
+  uv_loop_close(env->loop);
+  uv_library_shutdown();
+  env->allocator->verify_no_leaks();
+
+  delete env->allocator;
 }
 
 int main(int argc, char **argv) {
@@ -73,7 +93,6 @@ int main(int argc, char **argv) {
   RuntimeContext env;
   FSContext fs_ctx;
 
-
   env.loop = uv_default_loop();
   env.loop->data = &env;
   env.js_env = rt;
@@ -82,7 +101,8 @@ int main(int argc, char **argv) {
   env.server_pools = new MemPool<Server>(3);
   env.id_generator = &id_gen;
   env.fs_ctx = &fs_ctx;
-  
+  env.allocator = new Allocator();
+
   JS_SetRuntimeOpaque(rt, &env);
 
   // ################### Wire built-in libraries into JS engine
@@ -98,19 +118,7 @@ int main(int argc, char **argv) {
   }
 
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-  
 
-  free(code); // Well this is annoying.
-  for (JSValue v : http_context.registerd_cb) {
-    JS_FreeValue(ctx, v);
-  }
-
-  // Free Timer callbacks
-  for (JSValue v : timer_ctx.registered_cb) {
-    JS_FreeValue(ctx, v);
-  }
-  JS_FreeContext(ctx);
-  JS_FreeRuntime(rt);
-  uv_loop_close(uv_default_loop());
-  uv_library_shutdown();
+  free(code);
+  tear_down_runtime_env(&env, ctx);
 }

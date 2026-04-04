@@ -5,6 +5,7 @@
 #include "server.h"
 #include "timer_util.h"
 #include "fs_context.h"
+#include "allocator.h"
 class Server;
 
 struct RuntimeContext {
@@ -17,5 +18,6 @@ struct RuntimeContext {
   HttpContext *http_ctx;
   TimerContext *timer_ctx;
   MemPool<Server> *server_pools;
+  Allocator * allocator;
   FSContext * fs_ctx;
 };
