@@ -78,6 +78,7 @@ add_executable(mem_pool_perf
 
 add_executable(client_state_test
     tests/client_state_test.cc
+    src/allocator.cc
 )
 
 add_executable(http_parser_test

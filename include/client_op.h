@@ -1,5 +1,6 @@
 #pragma once
 #include "client_state.h"
+ 
 #include "runtime_context.h"
 namespace client_ops {
 
@@ -23,7 +24,7 @@ inline void clear_buffer(ClientState *client, RuntimeContext *ctx) {
   while (client->recv_head != nullptr) {
     ReadBuffer *currHead = client->recv_head;
     ReadBuffer *next = client->recv_head->next;
-    ctx->http_ctx->release_read_buffer(currHead);
+    ctx->allocator->release(currHead);
     client->recv_head = next;
     client->recv_count -= 1;
   }

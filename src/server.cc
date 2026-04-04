@@ -16,53 +16,9 @@ void Server::init_client_socket(ClientState *client_state) {
   }
 }
 
-// FWIW i'm fumbling around with text repsonses...need to get this worked out
-void add_http_header_to_plain_txt_response(ResponseObject &res) {
-  const char *body = res.response_buf;
-  size_t body_len = res.response_len;
-  char temp[16384];
-  size_t offset = 0;
-
-  // Status line
-  offset +=
-      snprintf(temp + offset, sizeof(temp) - offset, "HTTP/1.1 200 OK\r\n");
-
-  if (!res.headers.empty()) {
-    // Add headers from the map
-    for (const auto &kv : res.headers) {
-      offset += snprintf(temp + offset, sizeof(temp) - offset, "%s: %s\r\n",
-                         kv.first, kv.second);
-    }
-  } else {
-    offset += snprintf(temp + offset, sizeof(temp) - offset,
-                       "Content-Type: text/plain\r\n");
-  }
-
-  // Mandatory headers
-  offset += snprintf(temp + offset, sizeof(temp) - offset,
-                     "Content-Length: %zu\r\n"
-                     "Connection: keep-alive\r\n"
-                     "\r\n",
-                     body_len);
-
-  // Append body
-  if (body_len != 0) {
-    snprintf(temp + offset, sizeof(temp) - offset, "%s", body);
-
-    // Copy back to response_buf
-    strncpy(res.response_buf, temp, sizeof(res.response_buf));
-    // Ensure null termination in case of truncation
-    res.response_buf[sizeof(res.response_buf) - 1] = '\0';
-    res.response_len = strlen(res.response_buf);
-  } else {
-    strncpy(res.response_buf, temp, sizeof(res.response_buf));
-    res.response_len = strlen(res.response_buf);
-  }
-}
-
 void Server::on_client_closed_emergency(uv_handle_t *handle) {
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
-  ctx->http_ctx->release_emergency_handle((uv_tcp_t *)handle);
+  ctx->allocator->release((uv_tcp_t *)handle);
 }
 
 void Server::on_client_closed_cb(uv_handle_t *handle) {
@@ -81,8 +37,9 @@ void Server::on_write_cb(uv_write_t *req, int status) {
   }
 
   ClientState *client_state = (ClientState *)req->data;
+  RuntimeContext *ctx = (RuntimeContext *)req->handle->loop->data;
   client_state->write_in_flight = false; // dynamic writes
-  free(client_state->pending_write_buffer);
+  ctx->allocator->release(client_state->pending_write_buffer);
   uv_read_start((uv_stream_t *)&client_state->socket, on_alloc_buffer_cb,
                 on_read_cb);
 }
@@ -188,8 +145,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     }
 
     if (client_state->write_in_flight) {
-      ctx->http_ctx->release_read_buffer(rb);
-
+      ctx->allocator->release(rb);
       uv_read_stop(client);
       return;
     }
@@ -228,7 +184,9 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
       }
     } else {
 
-      client_state->pending_write_buffer = (char *)malloc(res.response_len);
+      // client_state->pending_write_buffer = (char *)malloc(res.response_len);
+      client_state->pending_write_buffer =
+          (char *)ctx->allocator->alloc(sizeof(char) * res.response_len);
       memcpy(client_state->pending_write_buffer, res.response_buf,
              res.response_len);
 
@@ -244,8 +202,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
 
   } else if (nread == UV_EOF) {
 
-    ctx->http_ctx->release_read_buffer((ReadBuffer *)buf->base);
-
+    ctx->allocator->release((ReadBuffer *)buf->base);
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
@@ -256,8 +213,8 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
   } else {
-    ctx->http_ctx->release_read_buffer((ReadBuffer *)buf->base);
 
+    ctx->allocator->release((ReadBuffer *)buf->base);
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
@@ -268,7 +225,7 @@ void Server::on_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
                                 uv_buf_t *buf) {
 
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
-  ReadBuffer *buffer = ctx->http_ctx->acquire_read_buffer();
+  ReadBuffer *buffer = (ReadBuffer *)ctx->allocator->alloc(sizeof(ReadBuffer));
   if (buffer != nullptr) {
     buf->base = buffer->read_buffer;
     buf->len = 256;
@@ -286,21 +243,20 @@ void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
   int rc;
 
   RuntimeContext *env = (RuntimeContext *)server_stream->loop->data;
-  // ClientState *client = env->http_ctx->acquire_connection();
   ClientState *client =
       (ClientState *)env->allocator->alloc(sizeof(ClientState));
 
   if (client == nullptr) {
     std::cerr << "Connection pool is exhausted!\n";
-    uv_tcp_t *temp_socket = env->http_ctx->acquire_emergency_handle();
 
+    uv_tcp_t *temp_socket = (uv_tcp_t *)env->allocator->alloc(sizeof(uv_tcp_t));
     int rc = uv_tcp_init(uv_default_loop(),
                          temp_socket); // Needs to let libuv know about socket
     std::cout << rc << std::endl;
     if (uv_accept(server_stream, (uv_stream_t *)temp_socket) == 0) {
       uv_close((uv_handle_t *)temp_socket, on_client_closed_emergency);
     } else {
-      env->http_ctx->release_emergency_handle(temp_socket);
+      env->allocator->release(temp_socket);
     }
 
     return;

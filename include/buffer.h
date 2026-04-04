@@ -1,3 +1,4 @@
+#pragma once
 struct Block8 {
     char buff[8];
 };

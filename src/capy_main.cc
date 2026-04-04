@@ -6,13 +6,6 @@
 #include "uv.h"
 #include <iostream>
 
-// Equivalent of Node's built-in modules
-void init_http_ctx(HttpContext &ctx) {
-  ctx.emergency_handles = new MemPool<uv_tcp_t>(16);
-  ctx.connection_pool = new MemPool<ClientState>(3); // C10K configuration
-  ctx.read_buffer_pool = new MemPool<ReadBuffer>(200);
-}
-
 void dump_exception(JSContext *ctx) {
   JSValue exc = JS_GetException(ctx);
 
@@ -83,11 +76,8 @@ int main(int argc, char **argv) {
   JSRuntime *rt = JS_NewRuntime();
   JSContext *ctx = JS_NewContext(rt);
 
-  // ################### Init Http context ########## //
-  HttpContext http_context;
-  init_http_ctx(http_context); // TODO: Might need to move httpContext to
-                               // heap....Rasp Pi stack is pretty small...
   // ################# Wire Libuv and QuickJS into RuntimeContext  ######## //
+  HttpContext http_context;
   TimerContext timer_ctx;
   IdGenerator id_gen;
   RuntimeContext env;
@@ -100,13 +90,13 @@ int main(int argc, char **argv) {
   env.timer_ctx = &timer_ctx;
   env.id_generator = &id_gen;
   env.fs_ctx = &fs_ctx;
-  env.allocator = new Allocator();
+  env.allocator = new Allocator(); // Can easily swap with malloc/free or
+                                   // straight up jemalloc
 
   JS_SetRuntimeOpaque(rt, &env);
 
   // ################### Wire built-in libraries into JS engine
   // ######################### //
-  // setup_console(ctx);
   setup_all_builtins(ctx);
   // ###################### Start JS isloate ################### //
   JSValue result = JS_Eval(ctx, code, len,
