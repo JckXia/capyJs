@@ -9,9 +9,7 @@
 class Server;
 
 struct RuntimeContext {
-  ~RuntimeContext() {
-    delete server_pools;
-  }
+ 
   IdGenerator *id_generator;
   uv_loop_t *loop;
   JSRuntime * js_env;

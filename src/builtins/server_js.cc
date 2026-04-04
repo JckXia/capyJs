@@ -9,7 +9,8 @@
 static void server_finalizer(JSRuntime *rt, JSValue val) {
   Server *server = (Server *)JS_GetOpaque(val, server_class_id);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
-  env->server_pools->release(server);
+ // env->server_pools->release(server);
+  env->allocator->release(server);
 }
 
 MappedFile mmap_static_file(const char *path) {
@@ -128,7 +129,9 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
   JSRuntime *rt = JS_GetRuntime(ctx);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
 
-  Server *server = env->server_pools->acquire();
+ // Server *server = env->server_pools->acquire();
+  Server * server = (Server*) env->allocator->alloc(sizeof(Server));
+  // TODO: Error handling, possibly throw an exception
   server->setEnv(env);
 
 

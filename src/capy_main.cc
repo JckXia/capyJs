@@ -98,7 +98,6 @@ int main(int argc, char **argv) {
   env.js_env = rt;
   env.http_ctx = &http_context;
   env.timer_ctx = &timer_ctx;
-  env.server_pools = new MemPool<Server>(3);
   env.id_generator = &id_gen;
   env.fs_ctx = &fs_ctx;
   env.allocator = new Allocator();

@@ -59,19 +59,21 @@ MemPool<T>::MemPool(size_t capacity) : capacity_(capacity), in_use_count_(0) {
 }
 
 template <typename T> void MemPool<T>::verify_no_leaks() const {
-  bool err_found = false;
+ 
+  int blocks_leaked = 0;
   for (int i = 0; i < capacity_; i++) {
     if (slots_[i].in_use == true) {
       std::cout << "[ERROR] slot " << i << "  " << slots_[i]
                 << " Has not been free'd! " << std::endl;
 
-      err_found = true;
+ 
+      blocks_leaked += 1;
     }
   }
-  if (!err_found) {
+  if (blocks_leaked == 0) {
     std::cout << "[SUCCESS] No leak found. All memory freed \n";
   } else {
-    dump_raw_state();
+    std::cout<<"[ERROR] Leaked "<<blocks_leaked <<" in total \n";
   }
 }
 
