@@ -13,6 +13,7 @@ struct ClientState {
   uv_tcp_t socket;
   uv_write_t write_handle;
   bool write_in_flight = false;
+  bool closing = false;
   ReadBuffer *recv_head;
   ReadBuffer *recv_tail;
 

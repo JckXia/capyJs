@@ -52,6 +52,8 @@ add_executable(capy
  src/util.cc
  src/timer_util.cc
  src/builtins/fs.cc
+ src/allocator.cc
+ src/http_message.cc
  src/builtins/builtins.cc
  src/builtins/console.cc
  src/builtins/request.cc
@@ -77,11 +79,18 @@ add_executable(mem_pool_perf
 
 add_executable(client_state_test
     tests/client_state_test.cc
+    src/allocator.cc
 )
 
 add_executable(http_parser_test
     tests/http_parser_test.cc
 )
 
+add_executable(allocator_test
+    tests/allocator_test.cc
+     src/allocator.cc
+)
+
+target_link_libraries(allocator_test  uv)
 target_link_libraries(http_parser_test picohttp)
 target_link_libraries(client_state_test uv quickjs)

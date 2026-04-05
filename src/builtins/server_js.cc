@@ -9,7 +9,8 @@
 static void server_finalizer(JSRuntime *rt, JSValue val) {
   Server *server = (Server *)JS_GetOpaque(val, server_class_id);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
-  env->server_pools->release(server);
+  // env->server_pools->release(server);
+  env->allocator->release(server);
 }
 
 MappedFile mmap_static_file(const char *path) {
@@ -104,16 +105,17 @@ static JSValue server_serve_static(JSContext *ctx, JSValueConst this_val,
   const char *fp = JS_ToCString(ctx, argv[1]);
   RuntimeContext *env =
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
-  server->registerFuncHandler("GET", uri,
-                              [env, fp](RequestObject &req, ResponseObject &res) {
-                              MappedFile f = env->http_ctx->static_files[fp];
-                              res.headers["Content-Type"] = "text/html";
-                              res.header_size += (strlen("text/html") + strlen("Content-Type"));
-                              
-                              res.is_static = true;
-                              res.static_data = f.data; // Zero-copy transfer
-                              res.response_len = f.size;
-                            });
+  server->registerFuncHandler(
+      "GET", uri, [env, fp](RequestObject &req, ResponseObject &res) {
+        MappedFile f = env->http_ctx->static_files[fp];
+        res.headers["Content-Type"] = "text/html";
+        res.header_size += (strlen("text/html") + strlen("Content-Type"));
+
+        res.is_static = true;
+        res.response_len = f.size;
+        res.response_buffer = f.data;
+        res.send();
+      });
 
   return JS_UNDEFINED;
 }
@@ -128,9 +130,10 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
   JSRuntime *rt = JS_GetRuntime(ctx);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
 
-  Server *server = env->server_pools->acquire();
+  // Server *server = env->server_pools->acquire();
+  Server *server = (Server *)env->allocator->alloc(sizeof(Server));
+  // TODO: Error handling, possibly throw an exception
   server->setEnv(env);
-
 
   JSValue staticFiles = JS_GetPropertyStr(ctx, argv[0], "staticFiles");
   int is_array = JS_IsArray(ctx, staticFiles);
@@ -144,7 +147,7 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
   JSValue len_val = JS_GetPropertyStr(ctx, staticFiles, "length");
   JS_ToUint32(ctx, &length, len_val);
   JS_FreeValue(ctx, len_val);
- 
+
   for (uint32_t i = 0; i < length; i++) {
     JSValue elem = JS_GetPropertyUint32(ctx, staticFiles, i);
 
@@ -152,8 +155,8 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
     size_t len;
 
     str = JS_ToCStringLen(ctx, &len, elem);
- 
-    env->http_ctx->static_files[str] = mmap_static_file(str); 
+
+    env->http_ctx->static_files[str] = mmap_static_file(str);
     JS_FreeValue(ctx, elem);
   }
 
@@ -172,8 +175,9 @@ void setup_server_class(JSContext *ctx) {
                     JS_NewCFunction(ctx, register_get_url, "get", 2));
   JS_SetPropertyStr(ctx, server_proto, "listen",
                     JS_NewCFunction(ctx, server_listen, "listen", 2));
-  JS_SetPropertyStr(ctx, server_proto, "serveStatic",
-                    JS_NewCFunction(ctx, server_serve_static, "serveStatic", 2));
+  JS_SetPropertyStr(
+      ctx, server_proto, "serveStatic",
+      JS_NewCFunction(ctx, server_serve_static, "serveStatic", 2));
   JS_SetClassProto(ctx, server_class_id, server_proto);
   JSValue global = JS_GetGlobalObject(ctx);
   JSValue ctor = JS_NewCFunction2(ctx, server_constructor, "Server", 0,

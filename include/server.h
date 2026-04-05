@@ -29,23 +29,11 @@ public:
 
   int run();
 
-  void setEnv(RuntimeContext *env) {
-    this->_env = env;
-  }
+  void setEnv(RuntimeContext *env) { this->_env = env; }
 
-  void setPortNum(int portNum) {
-    this->portNum = portNum;
-  }
+  void setPortNum(int portNum) { this->portNum = portNum; }
 
-private:
-  RuntimeContext *_env;
-  struct sockaddr_in _server_addr;
-  uv_tcp_t _server_stream;
-  int portNum;
-  const char *portAddr;
-
-  // libuv life cycle functions:
-  static void on_static_write_cb(uv_write_t * req, int status);
+  static void on_static_write_cb(uv_write_t *req, int status);
   static void on_write_cb(uv_write_t *req, int status);
   static void on_read_cb(uv_stream_t *client, ssize_t nread,
                          const uv_buf_t *buf);
@@ -56,4 +44,24 @@ private:
   static void on_client_closed_emergency(uv_handle_t *handle);
 
   static void init_client_socket(ClientState *client_state);
+
+private:
+  RuntimeContext *_env;
+  struct sockaddr_in _server_addr;
+  uv_tcp_t _server_stream;
+  int portNum;
+  const char *portAddr;
+
+  // // libuv life cycle functions:
+  // static void on_static_write_cb(uv_write_t * req, int status);
+  // static void on_write_cb(uv_write_t *req, int status);
+  // static void on_read_cb(uv_stream_t *client, ssize_t nread,
+  //                        const uv_buf_t *buf);
+  // static void on_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
+  //                                uv_buf_t *buf);
+  // static void on_client_closed_cb(uv_handle_t *handle);
+  // static void on_peer_connected(uv_stream_t *server_stream, int status);
+  // static void on_client_closed_emergency(uv_handle_t *handle);
+
+  // static void init_client_socket(ClientState *client_state);
 };

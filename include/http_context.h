@@ -15,17 +15,6 @@ struct HttpContext {
   MemPool<ReadBuffer> *read_buffer_pool;
   std::map<std::string, MappedFile> static_files;
   std::map<std::pair<std::string, std::string>, Handler> routes_;
-  ~HttpContext() {
-    std::cout<<"Verify emergency handle allocs and frees:===========\n";
-    emergency_handles->verify_no_leaks();
-    std::cout<<"Verify connection pooling allocs and frees:===============\n";
-    connection_pool->verify_no_leaks();
-    std::cout<<"Verify buffer pool allocs and frees:==============\n";
-    read_buffer_pool->verify_no_leaks();
-    delete emergency_handles;
-    delete connection_pool;
-    delete read_buffer_pool;
-  }
 
   void register_api_function(const char *method, const char *uri,
                              Handler handler) {

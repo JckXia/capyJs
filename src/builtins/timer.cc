@@ -10,8 +10,9 @@ struct Libuv_Cb {
 };
 
 void on_close(uv_handle_t * handle) {
-    delete (Libuv_Cb *) handle->data;
-    free(handle);
+    RuntimeContext * ctx = (RuntimeContext*) handle->loop->data;
+    ctx->allocator->release(handle->data);
+    ctx->allocator->release(handle);
 }
 
 void timer_libuv_cb(uv_timer_t * handle) {
@@ -42,11 +43,11 @@ static JSValue SetTimeOutFunc(JSContext * ctx, JSValueConst this_val, int argc, 
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
     env->timer_ctx->registered_cb.push_back(js_cb);
 
-    Libuv_Cb *cb = new Libuv_Cb();
+    Libuv_Cb* cb = (Libuv_Cb*) env->allocator->alloc(sizeof(Libuv_Cb));
     cb->js_cb = js_cb;
     cb->ctx = ctx;
 
-    uv_timer_t* handle = (uv_timer_t*) malloc(sizeof(uv_timer_t));
+    uv_timer_t* handle = (uv_timer_t*) env->allocator->alloc(sizeof(uv_timer_t));
     uv_timer_init(env->loop, handle);
     handle->data = cb;
     uv_timer_start(handle, timer_libuv_cb, delay, 0);
@@ -62,11 +63,11 @@ static JSValue SetIntervalFunc(JSContext * ctx, JSValueConst this_val, int argc,
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
     env->timer_ctx->registered_cb.push_back(js_cb);
 
-    Libuv_Cb *cb = new Libuv_Cb();
+    Libuv_Cb* cb = (Libuv_Cb*) env->allocator->alloc(sizeof(Libuv_Cb));
     cb->js_cb = js_cb;
     cb->ctx = ctx;
 
-    uv_timer_t* handle = (uv_timer_t*) malloc(sizeof(uv_timer_t));
+    uv_timer_t* handle = (uv_timer_t*) env->allocator->alloc(sizeof(uv_timer_t));
     uv_timer_init(env->loop, handle);
     handle->data = cb;
     uv_timer_start(handle, set_interval_libuv_cb, delay, delay);
