@@ -38,9 +38,9 @@ int ResponseObject::build_headers(char *header_buf, size_t header_len,
   offset += snprintf(header_buf + offset, header_len - offset, "\r\n");
   return offset;
 }
-void ResponseObject::on_static_write_cb(uv_write_t * req, int status) {
-    ClientState *client_state = (ClientState *)req->data;
-    client_state->write_in_flight = false;
+void ResponseObject::on_static_write_cb(uv_write_t *req, int status) {
+  ClientState *client_state = (ClientState *)req->data;
+  client_state->write_in_flight = false;
 }
 void ResponseObject::on_write_cb(uv_write_t *req, int status) {
   if (status) {
@@ -53,12 +53,14 @@ void ResponseObject::on_write_cb(uv_write_t *req, int status) {
   RuntimeContext *ctx = (RuntimeContext *)req->handle->loop->data;
   client_state->write_in_flight = false;
   ctx->allocator->release(client_state->pending_write_buffer);
+  uv_read_start((uv_stream_t *)&client_state->socket,
+                Server::on_alloc_buffer_cb, Server::on_read_cb);
 }
 
 void ResponseObject::send() {
   ClientState *client_state = (ClientState *)cli->data;
   RuntimeContext *ctx = (RuntimeContext *)cli->loop->data;
-  if(client_state->closing == true) { 
+  if (client_state->closing == true) {
     return;
   }
   size_t header_len = header_size + 256;
@@ -72,8 +74,7 @@ void ResponseObject::send() {
                         uv_buf_init(static_data, response_len)};
 
     int rc;
-    if ((rc = uv_write(write_handle, cli, bufs, 2, on_static_write_cb)) <
-        0) {
+    if ((rc = uv_write(write_handle, cli, bufs, 2, on_static_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
     }
   } else {
@@ -88,6 +89,12 @@ void ResponseObject::send() {
     int rc;
     if ((rc = uv_write(write_handle, cli, bufs, 2, on_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
+      // ctx->allocator->release(this);
+      // free(this);
+      delete (this);
+      return;
     }
+    delete (this);
+    // ctx->allocator->release(this);
   }
 }

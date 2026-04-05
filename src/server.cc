@@ -109,7 +109,6 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
                         const uv_buf_t *buf) {
   ClientState *client_state = (ClientState *)client->data;
   RuntimeContext *ctx = (RuntimeContext *)client->loop->data;
-                           
 
   if (nread > 0) {
 
@@ -155,7 +154,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     client_state->write_in_flight = true;
 
     RequestObject req;
-    ResponseObject res;
+    ResponseObject *res = new ResponseObject();
 
     memcpy(req.verb, method, method_len);
     memcpy(req.uri, path, path_len);
@@ -164,11 +163,11 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     req.uri[path_len] = '\0';
 
     client_ops::clear_buffer(client_state, ctx);
-    res.cli = client;
+    res->cli = client;
     ctx->http_ctx->invoke_function(
-        req, res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS"
-                                      // "INVOKE_FAILED" "ROUTE_NOT_FOUND"
- 
+        req, *res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS"
+                                       // "INVOKE_FAILED" "ROUTE_NOT_FOUND"
+
   } else if (nread == UV_EOF) {
 
     ctx->allocator->release((ReadBuffer *)buf->base);
