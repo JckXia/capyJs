@@ -13,19 +13,16 @@ struct RequestObject {
 // TODO: Refactor this
 struct ResponseObject {
   size_t response_len = 0;
-  char response_buf[8192];
+  char *response_buffer;
 
   std::map<const char *, const char *> headers;
   int header_size = 0;
 
   bool is_static = false;
-  char *static_data;
-  // ClientState *cli;
   uv_stream_t *cli;
 
   static int build_headers(char *header_buf, size_t header_len,
                            ResponseObject *res);
-        
 
   static void on_write_cb(uv_write_t *req, int status);
   static void on_static_write_cb(uv_write_t *req, int status);
