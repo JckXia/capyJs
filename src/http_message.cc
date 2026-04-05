@@ -85,8 +85,7 @@ void ResponseObject::send() {
         (char *)ctx->allocator->alloc(sizeof(char) * response_len);
 
     memcpy(client_state->pending_write_buffer, response_buffer, response_len);
-    free(response_buffer);
-
+    ctx->allocator->release(response_buffer);
     uv_buf_t bufs[2] = {
         uv_buf_init(header_buf, header_len),
         uv_buf_init(client_state->pending_write_buffer, response_len)};

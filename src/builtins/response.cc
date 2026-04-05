@@ -1,6 +1,8 @@
 #include "builtins/response.h"
 #include "http_message.h"
 #include <string.h>
+#include "runtime_context.h" // Do we really need this to get allocator?
+
 static JSClassDef response_class_def = {.class_name = "Response"};
 JSClassID response_class_id;
 static JSValue response_end(JSContext *ctx, JSValueConst this_val, int argc,
@@ -9,7 +11,9 @@ static JSValue response_end(JSContext *ctx, JSValueConst this_val, int argc,
       (ResponseObject *)JS_GetOpaque2(ctx, this_val, response_class_id);
   if (!res)
     return JS_EXCEPTION;
-
+  JSRuntime *rt = JS_GetRuntime(ctx);
+  RuntimeContext *env =
+      (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx)); // TODO: Make this into a helper function
   const char *body = JS_ToCString(ctx, argv[0]);
   size_t len = strlen(body);
 
@@ -17,7 +21,8 @@ static JSValue response_end(JSContext *ctx, JSValueConst this_val, int argc,
     JS_FreeCString(ctx, body);
     return JS_ThrowRangeError(ctx, "Response too large");
   }
-  res->response_buffer = (char *)malloc(sizeof(char) * len + 1);
+
+  res->response_buffer = (char *) env->allocator->alloc(sizeof(char) * len + 1); // TODO: Figure out how to handle if OOM here
   memcpy(res->response_buffer, body, len + 1); // Copy into your buffer
   res->response_len = len;
 
