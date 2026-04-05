@@ -94,12 +94,9 @@ void ResponseObject::send() {
     int rc;
     if ((rc = uv_write(write_handle, cli, bufs, 2, on_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
-      // ctx->allocator->release(this);
-      // free(this);
       delete (this);
       return;
     }
     delete (this);
-    // ctx->allocator->release(this);
   }
 }

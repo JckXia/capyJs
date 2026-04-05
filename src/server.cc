@@ -154,8 +154,6 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     client_state->write_in_flight = true;
 
     RequestObject req;
-    // ResponseObject* res= (ResponseObject*)
-    // ctx->allocator->alloc(sizeof(ResponseObject));
     ResponseObject *res = new ResponseObject();
 
     memcpy(req.verb, method, method_len);

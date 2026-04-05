@@ -2,7 +2,6 @@
 #include "client_state.h"
 #include "uv.h"
 #include <cstddef>
-#include <iostream>
 #include <map> // TODO: All of this needs to be repalced with deterministinc alloc
 
 struct RequestObject {
