@@ -25,6 +25,7 @@ void Server::on_client_closed_cb(uv_handle_t *handle) {
   std::cout << "Client closing! \n";
   uv_tcp_t *client_sock = (uv_tcp_t *)handle;
   ClientState *client = (ClientState *)client_sock->data;
+  client->closing = true;
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
   ctx->allocator->release(client);
 }
@@ -108,6 +109,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
                         const uv_buf_t *buf) {
   ClientState *client_state = (ClientState *)client->data;
   RuntimeContext *ctx = (RuntimeContext *)client->loop->data;
+                           
 
   if (nread > 0) {
 
@@ -144,7 +146,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
       return;
     }
 
-    if (client_state->write_in_flight) {
+    if (client_state->write_in_flight || client_state->closing == true) {
       ctx->allocator->release(rb);
       uv_read_stop(client);
       return;
@@ -162,44 +164,11 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     req.uri[path_len] = '\0';
 
     client_ops::clear_buffer(client_state, ctx);
-
+    res.cli = client;
     ctx->http_ctx->invoke_function(
         req, res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS"
                                       // "INVOKE_FAILED" "ROUTE_NOT_FOUND"
-
-    size_t header_len = res.header_size + 256;
-    char header_buf[header_len]; // 256 default headers
-    header_len = build_headers_buf(header_buf, header_len, res);
-    uv_write_t *write_handle = &client_state->write_handle;
-    write_handle->data = client_state;
-
-    if (res.is_static) {
-      uv_buf_t bufs[2] = {uv_buf_init(header_buf, header_len),
-                          uv_buf_init(res.static_data, res.response_len)};
-
-      int rc;
-      if ((rc = uv_write(write_handle, client, bufs, 2, on_static_write_cb)) <
-          0) {
-        std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
-      }
-    } else {
-
-      // client_state->pending_write_buffer = (char *)malloc(res.response_len);
-      client_state->pending_write_buffer =
-          (char *)ctx->allocator->alloc(sizeof(char) * res.response_len);
-      memcpy(client_state->pending_write_buffer, res.response_buf,
-             res.response_len);
-
-      uv_buf_t bufs[2] = {
-          uv_buf_init(header_buf, header_len),
-          uv_buf_init(client_state->pending_write_buffer, res.response_len)};
-
-      int rc;
-      if ((rc = uv_write(write_handle, client, bufs, 2, on_write_cb)) < 0) {
-        std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
-      }
-    }
-
+ 
   } else if (nread == UV_EOF) {
 
     ctx->allocator->release((ReadBuffer *)buf->base);

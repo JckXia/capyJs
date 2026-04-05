@@ -114,6 +114,7 @@ static JSValue server_serve_static(JSContext *ctx, JSValueConst this_val,
                               res.is_static = true;
                               res.static_data = f.data; // Zero-copy transfer
                               res.response_len = f.size;
+                              res.send();
                             });
 
   return JS_UNDEFINED;
