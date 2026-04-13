@@ -89,12 +89,11 @@ static JSValue register_ws_url(JSContext *ctx, JSValueConst this_val, int argc,
   server->registerWsFuncHandler(
        uri, [ctx, callback](WebSocket& ws) {
         JSValue js_ws = JS_NewObjectClass(ctx, web_socket_class_id);
-        JS_SetOpaque(js_ws,&ws);
+        JS_SetOpaque(js_ws, &ws);
         JSValue args[] = {js_ws};
+        ws.sock_js = js_ws;
         JS_Call(ctx, callback, JS_UNDEFINED, 1, args);
-
-        JS_FreeValue(ctx, js_ws);
- 
+        // JS_FreeValue(ctx, js_ws);
   });
   JS_FreeCString(ctx, uri);
   env->http_ctx->registerd_cb.push_back(callback);

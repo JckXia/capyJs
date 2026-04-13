@@ -88,6 +88,7 @@ int main(int argc, char **argv) {
   env.loop = uv_default_loop();
   env.loop->data = &env;
   env.js_env = rt;
+  env.js_ctx = ctx;
   env.http_ctx = &http_context;
   env.timer_ctx = &timer_ctx;
   env.id_generator = &id_gen;

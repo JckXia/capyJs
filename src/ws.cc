@@ -2,8 +2,20 @@
 #include "client_state.h"
 #include "runtime_context.h"
 #include "types.h"
+#include "quickjs.h"
 
 void WebSocket::send_frame() {}
+
+void WebSocket::onMessage() {
+    RuntimeContext *env = (RuntimeContext *)cli->loop->data;
+    JSValue js = this->sock_js;
+    JSValue onmessage = JS_GetPropertyStr(env->js_ctx, js, "onMessage");   
+    if (JS_IsFunction(env->js_ctx, onmessage)) {
+        JSValue payload = JS_NewString(env->js_ctx, "hello world");
+        JS_Call(env->js_ctx, onmessage, js, 1, &payload);
+        JS_FreeValue(env->js_ctx, payload);
+    }
+}
 
 /**
 HTTP/1.1 101 Switching Protocols
@@ -11,7 +23,6 @@ Upgrade: websocket
 Connection: Upgrade
 Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
 */
-
 void WebSocket::complete_protocol_upgrade_handshake(
     const std::string &exchange_key) {
   ClientState *client_state = (ClientState *)cli->data;
@@ -45,6 +56,7 @@ void WebSocket::complete_protocol_upgrade_handshake(
     ctx->sock_alloc->release(req);
     // ctx->sock_alloc->release(req);
   });
-
+  client_state->activeWs = this;
   client_state->conn_protocol = ConnectionProtocol::TYPE_WEB_SOCKET;
+ 
 }
