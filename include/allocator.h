@@ -8,6 +8,7 @@ public:
   explicit Allocator();
   ~Allocator();
   void *alloc(size_t size);
+  void *alloc(size_t size, uint8_t type);
   void release(void *data);
   void verify_no_leaks();
 

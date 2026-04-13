@@ -1,8 +1,10 @@
 #include "allocator.h"
+#include "types.h"
 #include <iostream>
 
 struct BlockHeader {
   uint8_t bin_index; // 1 byte is plenty for 10 bins
+  uint8_t type_hint;
 };
 
 Allocator::Allocator() {
@@ -27,14 +29,37 @@ Allocator::~Allocator() {
   delete this->b_1024;
 }
 void Allocator::verify_no_leaks() {
-  this->b_8->verify_no_leaks();
-  this->b_16->verify_no_leaks();
-  this->b_32->verify_no_leaks();
-  this->b_64->verify_no_leaks();
-  this->b_128->verify_no_leaks();
-  this->b_256->verify_no_leaks();
-  this->b_512->verify_no_leaks();
-  this->b_1024->verify_no_leaks();
+  size_t counts[64] = {}; // count per type_id, zero initialized
+
+  auto scan = [&](auto *pool) {
+    for (size_t i = 0; i < pool->capacity(); i++) {
+      if (pool->slots_[i].in_use) {
+        BlockHeader *h = (BlockHeader *)&pool->slots_[i].data;
+        uint8_t type_id = h->type_hint;
+        counts[type_id]++;
+      }
+    }
+  };
+
+  scan(b_8);
+  scan(b_16);
+  scan(b_32);
+  scan(b_64);
+  scan(b_128);
+  scan(b_256);
+  scan(b_512);
+  scan(b_1024);
+
+  bool any_leaked = false;
+  for (int i = 0; i < 64; i++) {
+    if (counts[i] > 0) {
+      any_leaked = true;
+      std::cout << "[LEAK] " << counts[i] << "x " << TYPE_NAMES[i] << "\n";
+    }
+  }
+
+  if (!any_leaked)
+    std::cout << "No leaks!\n";
 }
 
 size_t get_bin_index(size_t size) {
@@ -71,7 +96,20 @@ void *Allocator::alloc(size_t size) {
   }
   BlockHeader *header = static_cast<BlockHeader *>(block);
   header->bin_index = bin_idx;
+  header->type_hint = AllocType::TYPE_UNKNOWN;
 
+  return header + 1;
+}
+
+void *Allocator::alloc(size_t size, uint8_t type) {
+  uint8_t bin_idx = get_bin_index(size);
+  void *block = alloc_helper(bin_idx);
+  if (block == nullptr) {
+    return nullptr;
+  }
+  BlockHeader *header = static_cast<BlockHeader *>(block);
+  header->bin_index = bin_idx;
+  header->type_hint = type;
   return header + 1;
 }
 

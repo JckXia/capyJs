@@ -28,6 +28,8 @@ public:
 
   bool is_exhausted() const;
 
+  friend class Allocator;
+
 private:
   struct Slot {
     T data;
@@ -59,21 +61,19 @@ MemPool<T>::MemPool(size_t capacity) : capacity_(capacity), in_use_count_(0) {
 }
 
 template <typename T> void MemPool<T>::verify_no_leaks() const {
- 
+
   int blocks_leaked = 0;
+  // std::map<const char*, int> leaked_blocks;
   for (int i = 0; i < capacity_; i++) {
     if (slots_[i].in_use == true) {
       std::cout << "[ERROR] slot " << i << "  " << slots_[i]
                 << " Has not been free'd! " << std::endl;
 
- 
       blocks_leaked += 1;
     }
   }
   if (blocks_leaked == 0) {
     std::cout << "[SUCCESS] No leak found. All memory freed \n";
-  } else {
-    std::cout<<"[ERROR] Leaked "<<blocks_leaked <<" in total \n";
   }
 }
 

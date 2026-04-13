@@ -91,6 +91,11 @@ add_executable(allocator_test
      src/allocator.cc
 )
 
+add_executable(allocator_type_test
+    tests/allocator_type_hint_test.cc
+     src/allocator.cc
+)
+
 target_link_libraries(allocator_test  uv)
 target_link_libraries(http_parser_test picohttp)
 target_link_libraries(client_state_test uv quickjs)
