@@ -157,7 +157,7 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
   JSRuntime *rt = JS_GetRuntime(ctx);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
 
-  // Server *server = env->server_pools->acquire();
+ 
   Server *server = (Server *)env->allocator->alloc(sizeof(Server));
   // TODO: Error handling, possibly throw an exception
   server->setEnv(env);

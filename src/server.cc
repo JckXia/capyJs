@@ -197,6 +197,19 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
   req.uri[path_len] = '\0';
 
   client_ops::clear_buffer(client_state, ctx);
+
+  WSUpgradeInfo info = parseWSUpgrade(headers, num_headers);
+  if (info.isUpgrade) {
+    // Switch protocol
+    std::string accept_key = compute_ws_accept_key(info.key);
+    WebSocket *ws = (WebSocket*)ctx->sock_alloc->alloc(sizeof(WebSocket), AllocType::TYPE_WS);
+    ws->cli = client;
+    ctx->http_ctx->invoke_ws_function(*ws, req.uri); // The setup function
+    ws->complete_protocol_upgrade_handshake(accept_key);
+    delete res;
+    return;
+  } 
+  
   res->cli = client;
   ctx->http_ctx->invoke_function(
       req, *res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS"
