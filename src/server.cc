@@ -169,7 +169,10 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
 }
 
 void Server::process_web_socket_request(uv_stream_t *client, ssize_t nread,
-                                        const uv_buf_t *buf) {}
+                                        const uv_buf_t *buf) {
+  ClientState *client_state = (ClientState *)client->data;
+  RuntimeContext *ctx = (RuntimeContext *)client->loop->data;
+}
 // Web Socket is initialized...client side
 void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
                         const uv_buf_t *buf) {
