@@ -4,6 +4,8 @@
 #include "picohttpparser.h"
 #include <map>
 #include <string>
+#include "ws.h"
+#include "util.h"
 
 Server::Server() {}
 void Server::init_client_socket(ClientState *client_state) {
@@ -149,7 +151,12 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
     uv_read_stop(client);
     return;
   }
+  WSUpgradeInfo ws = parseWSUpgrade(headers, num_headers);
 
+  if (ws.isUpgrade) {
+    std::string accept = compute_ws_accept_key(ws.key);
+    std::cout<<"Computed exchange key " << accept << std::endl;
+  }
   client_state->write_in_flight = true;
 
   RequestObject req;
