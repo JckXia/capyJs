@@ -1,5 +1,6 @@
 #include "server.h"
 #include "client_op.h"
+#include "client_state.h"
 #include "picohttpparser.h"
 #include <map>
 #include <string>
@@ -105,6 +106,71 @@ int build_headers(char *buf, size_t body_len, const char *content_type) {
                   "\r\n",
                   content_type, body_len);
 }
+
+void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
+                                    const uv_buf_t *buf) {
+  ClientState *client_state = (ClientState *)client->data;
+  RuntimeContext *ctx = (RuntimeContext *)client->loop->data;
+  ReadBuffer *rb = (ReadBuffer *)buf->base;
+  rb->len = nread;
+
+  client_ops::recv_new_buffer(client_state, rb);
+
+  char buffer_data[client_state->recv_len];
+  client_ops::flatten_buffer(client_state, buffer_data);
+
+  const char *method;
+  const char *path;
+  int minor_version;
+  struct phr_header headers[100];
+
+  size_t method_len = 0;
+  size_t path_len = 0;
+  size_t num_headers = 100;
+
+  ssize_t pret = phr_parse_request(buffer_data, client_state->recv_len, &method,
+                                   &method_len, &path, &path_len,
+                                   &minor_version, headers, &num_headers, 0);
+
+  // More packet might arrive!
+  if (pret == -2) {
+    return;
+  }
+
+  if (pret < 0) {
+    if (!uv_is_closing((uv_handle_t *)client)) {
+      uv_close((uv_handle_t *)client, on_client_closed_cb);
+    }
+    return;
+  }
+
+  if (client_state->write_in_flight || client_state->closing == true) {
+    ctx->allocator->release(rb);
+    uv_read_stop(client);
+    return;
+  }
+
+  client_state->write_in_flight = true;
+
+  RequestObject req;
+  ResponseObject *res = new ResponseObject();
+
+  memcpy(req.verb, method, method_len);
+  memcpy(req.uri, path, path_len);
+
+  req.verb[method_len] = '\0';
+  req.uri[path_len] = '\0';
+
+  client_ops::clear_buffer(client_state, ctx);
+  res->cli = client;
+  ctx->http_ctx->invoke_function(
+      req, *res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS"
+                                     // "INVOKE_FAILED" "ROUTE_NOT_FOUND"
+}
+
+void Server::process_web_socket_request(uv_stream_t *client, ssize_t nread,
+                                        const uv_buf_t *buf) {}
+// Web Socket is initialized...client side
 void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
                         const uv_buf_t *buf) {
   ClientState *client_state = (ClientState *)client->data;
@@ -112,62 +178,17 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
 
   if (nread > 0) {
 
-    ReadBuffer *rb = (ReadBuffer *)buf->base;
-    rb->len = nread;
-
-    client_ops::recv_new_buffer(client_state, rb);
-
-    char buffer_data[client_state->recv_len];
-    client_ops::flatten_buffer(client_state, buffer_data);
-
-    const char *method;
-    const char *path;
-    int minor_version;
-    struct phr_header headers[100];
-
-    size_t method_len = 0;
-    size_t path_len = 0;
-    size_t num_headers = 100;
-
-    ssize_t pret = phr_parse_request(buffer_data, client_state->recv_len,
-                                     &method, &method_len, &path, &path_len,
-                                     &minor_version, headers, &num_headers, 0);
-
-    // More packet might arrive!
-    if (pret == -2) {
-      return;
+    switch (client_state->conn_protocol) {
+    case ConnectionProtocol::TYPE_HTTP_1:
+      process_http_1_request(client, nread, buf);
+      break;
+    case ConnectionProtocol::TYPE_WEB_SOCKET:
+      process_web_socket_request(client, nread, buf);
+      break;
+    default:
+      assert(false && "protcol is not supported");
+      break;
     }
-
-    if (pret < 0) {
-      if (!uv_is_closing((uv_handle_t *)client)) {
-        uv_close((uv_handle_t *)client, on_client_closed_cb);
-      }
-      return;
-    }
-
-    if (client_state->write_in_flight || client_state->closing == true) {
-      ctx->allocator->release(rb);
-      uv_read_stop(client);
-      return;
-    }
-
-    client_state->write_in_flight = true;
-
-    RequestObject req;
-    ResponseObject *res = new ResponseObject();
-
-    memcpy(req.verb, method, method_len);
-    memcpy(req.uri, path, path_len);
-
-    req.verb[method_len] = '\0';
-    req.uri[path_len] = '\0';
-
-    client_ops::clear_buffer(client_state, ctx);
-    res->cli = client;
-    ctx->http_ctx->invoke_function(
-        req, *res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS"
-                                       // "INVOKE_FAILED" "ROUTE_NOT_FOUND"
-
   } else if (nread == UV_EOF) {
 
     ctx->allocator->release((ReadBuffer *)buf->base);
@@ -204,6 +225,17 @@ void Server::on_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
   }
 }
 
+static void init_client_state(ClientState *cli) {
+  cli->closing = false;
+  cli->write_in_flight = false;
+  cli->conn_protocol = ConnectionProtocol::TYPE_HTTP_1;
+  cli->pending_write_buffer = nullptr;
+  cli->recv_count = 0;
+  cli->recv_len = 0;
+  cli->recv_head = nullptr;
+  cli->recv_tail = nullptr;
+}
+
 void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
   if (status < 0) {
     return;
@@ -230,6 +262,7 @@ void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
     return;
   }
 
+  init_client_state(client);
   init_client_socket(client);
 
   if (uv_accept(server_stream, (uv_stream_t *)&client->socket) ==
