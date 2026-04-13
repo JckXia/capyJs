@@ -17,5 +17,6 @@ struct RuntimeContext {
   TimerContext *timer_ctx;
   MemPool<Server> *server_pools;
   Allocator * allocator;
+  Allocator* sock_alloc;
   FSContext * fs_ctx;
 };

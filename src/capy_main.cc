@@ -46,8 +46,10 @@ void tear_down_runtime_env(RuntimeContext *env, JSContext *ctx) {
   uv_loop_close(env->loop);
   uv_library_shutdown();
   env->allocator->verify_no_leaks();
-
+  env->sock_alloc->verify_no_leaks();
+  
   delete env->allocator;
+  delete env->sock_alloc;
 }
 
 int main(int argc, char **argv) {
@@ -92,6 +94,7 @@ int main(int argc, char **argv) {
   env.fs_ctx = &fs_ctx;
   env.allocator = new Allocator(); // Can easily swap with malloc/free or
                                    // straight up jemalloc
+  env.sock_alloc = new Allocator(); // Allocator dedicated for websocket for debugging
 
   JS_SetRuntimeOpaque(rt, &env);
 
