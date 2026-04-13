@@ -2,44 +2,44 @@
 #include "client_op.h"
 #include "client_state.h"
 #include "picohttpparser.h"
+#include "types.h"
+#include "util.h"
+#include "ws.h"
 #include <map>
 #include <string>
-#include "ws.h"
-#include "util.h"
-#include "types.h"
 Server::Server() {}
 
-WSUpgradeInfo parseWSUpgrade(phr_header* headers, size_t num_headers) {
-    WSUpgradeInfo info = {false, "", "", ""};
-    
-    bool hasUpgrade = false;
-    bool hasConnection = false;
-    
-    for (size_t i = 0; i < num_headers; i++) {
-        std::string name(headers[i].name, headers[i].name_len);
-        std::string value(headers[i].value, headers[i].value_len);
-        
-        // Case-insensitive compare
-        if (name.size() == 7 && strncasecmp(name.c_str(), "Upgrade", 7) == 0) {
-            hasUpgrade = (strncasecmp(value.c_str(), "websocket", 9) == 0);
-        }
-        else if (name.size() == 10 && strncasecmp(name.c_str(), "Connection", 10) == 0) {
-            // Connection might be "Upgrade" or "keep-alive, Upgrade"
-            hasConnection = (strcasestr(value.c_str(), "upgrade") != nullptr);
-        }
-        else if (name.size() == 17 && strncasecmp(name.c_str(), "Sec-WebSocket-Key", 17) == 0) {
-            info.key = value;
-        }
-        else if (name.size() == 21 && strncasecmp(name.c_str(), "Sec-WebSocket-Version", 21) == 0) {
-            info.version = value;
-        }
-        else if (name.size() == 22 && strncasecmp(name.c_str(), "Sec-WebSocket-Protocol", 22) == 0) {
-            info.protocol = value;
-        }
+WSUpgradeInfo parseWSUpgrade(phr_header *headers, size_t num_headers) {
+  WSUpgradeInfo info = {false, "", "", ""};
+
+  bool hasUpgrade = false;
+  bool hasConnection = false;
+
+  for (size_t i = 0; i < num_headers; i++) {
+    std::string name(headers[i].name, headers[i].name_len);
+    std::string value(headers[i].value, headers[i].value_len);
+
+    // Case-insensitive compare
+    if (name.size() == 7 && strncasecmp(name.c_str(), "Upgrade", 7) == 0) {
+      hasUpgrade = (strncasecmp(value.c_str(), "websocket", 9) == 0);
+    } else if (name.size() == 10 &&
+               strncasecmp(name.c_str(), "Connection", 10) == 0) {
+      // Connection might be "Upgrade" or "keep-alive, Upgrade"
+      hasConnection = (strcasestr(value.c_str(), "upgrade") != nullptr);
+    } else if (name.size() == 17 &&
+               strncasecmp(name.c_str(), "Sec-WebSocket-Key", 17) == 0) {
+      info.key = value;
+    } else if (name.size() == 21 &&
+               strncasecmp(name.c_str(), "Sec-WebSocket-Version", 21) == 0) {
+      info.version = value;
+    } else if (name.size() == 22 &&
+               strncasecmp(name.c_str(), "Sec-WebSocket-Protocol", 22) == 0) {
+      info.protocol = value;
     }
-    
-    info.isUpgrade = hasUpgrade && hasConnection && !info.key.empty();
-    return info;
+  }
+
+  info.isUpgrade = hasUpgrade && hasConnection && !info.key.empty();
+  return info;
 }
 void Server::init_client_socket(ClientState *client_state) {
   uv_tcp_t *client_sock = &client_state->socket;
@@ -202,24 +202,26 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
   if (info.isUpgrade) {
     // Switch protocol
     std::string accept_key = compute_ws_accept_key(info.key);
-    WebSocket *ws = (WebSocket*)ctx->sock_alloc->alloc(sizeof(WebSocket), AllocType::TYPE_WS);
+    WebSocket *ws = (WebSocket *)ctx->sock_alloc->alloc(sizeof(WebSocket),
+                                                        AllocType::TYPE_WS);
     ws->cli = client;
     ctx->http_ctx->invoke_ws_function(*ws, req.uri); // The setup function
     ws->complete_protocol_upgrade_handshake(accept_key);
     delete res;
     return;
-  } 
-  
+  }
+
   res->cli = client;
   ctx->http_ctx->invoke_function(
-      req, *res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS"
-                                     // "INVOKE_FAILED" "ROUTE_NOT_FOUND"
+      req, *res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS",
+                                     // "INVOKE_FAILED", "NOT_FOUND"
 }
 
 void Server::process_web_socket_request(uv_stream_t *client, ssize_t nread,
                                         const uv_buf_t *buf) {
   ClientState *client_state = (ClientState *)client->data;
   RuntimeContext *ctx = (RuntimeContext *)client->loop->data;
+  std::cout << "Receiving request \n";
 }
 // Web Socket is initialized...client side
 void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
@@ -335,7 +337,7 @@ void Server::registerFuncHandler(const char *method, const char *uri,
   this->_env->http_ctx->register_api_function(method, uri, handler);
 }
 
-void Server::registerWsFuncHandler(const char * uri, WSHandler handler) {
+void Server::registerWsFuncHandler(const char *uri, WSHandler handler) {
   this->_env->http_ctx->register_ws_cb(uri, handler);
 }
 
