@@ -2,6 +2,7 @@
 #include <string>
 #include "uv.h"
 #include "quickjs.h"
+
 struct WSUpgradeInfo {
     bool isUpgrade;
     std::string key;
@@ -16,7 +17,7 @@ struct WebSocket {
     const std::string ON_MESSAGE_JS_KEY = "onMessage";
     JSValue sock_js;     
     uv_stream_t *cli;
-    void onMessage(); 
+    void onMessage(const std::string &s); 
     void send_frame();
     void complete_protocol_upgrade_handshake(const std::string& exchange_key);
 }; 

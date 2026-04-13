@@ -6,12 +6,12 @@
 
 void WebSocket::send_frame() {}
 
-void WebSocket::onMessage() {
+void WebSocket::onMessage(const std::string& frame_data) {
     RuntimeContext *env = (RuntimeContext *)cli->loop->data;
     JSValue js = this->sock_js;
     JSValue onmessage = JS_GetPropertyStr(env->js_ctx, js, "onMessage");   
     if (JS_IsFunction(env->js_ctx, onmessage)) {
-        JSValue payload = JS_NewString(env->js_ctx, "hello world");
+        JSValue payload = JS_NewString(env->js_ctx, frame_data.c_str());
         JS_Call(env->js_ctx, onmessage, js, 1, &payload);
         JS_FreeValue(env->js_ctx, payload);
     }

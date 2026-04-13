@@ -7,6 +7,59 @@
 #include "ws.h"
 #include <map>
 #include <string>
+
+struct Frame {
+    bool fin;
+    uint8_t opcode;
+    uint8_t* payload;
+    size_t len;
+};
+
+// Returns bytes consumed, 0 if need more data
+size_t parseFrame(const uint8_t* data, size_t len, Frame& frame) {
+    if (len < 2) return 0;
+    
+    frame.fin = data[0] & 0x80;
+    frame.opcode = data[0] & 0x0F;
+    
+    bool masked = data[1] & 0x80;
+    uint64_t payload_len = data[1] & 0x7F;
+    
+    size_t offset = 2;
+    
+    if (payload_len == 126) {
+        if (len < 4) return 0;
+        payload_len = (data[2] << 8) | data[3];
+        offset = 4;
+    } else if (payload_len == 127) {
+        if (len < 10) return 0;
+        payload_len = 0;
+        for (int i = 0; i < 8; i++) {
+            payload_len = (payload_len << 8) | data[2 + i];
+        }
+        offset = 10;
+    }
+    
+    size_t mask_offset = offset;
+    if (masked) offset += 4;
+    
+    size_t total = offset + payload_len;
+    if (len < total) return 0;  // need more data
+    
+    // Unmask in place (client->server is always masked)
+    frame.payload = (uint8_t*)data + offset;
+    frame.len = payload_len;
+    
+    if (masked) {
+        const uint8_t* mask = data + mask_offset;
+        for (size_t i = 0; i < payload_len; i++) {
+            frame.payload[i] ^= mask[i % 4];
+        }
+    }
+    
+    return total;
+}
+
 Server::Server() {}
 
 WSUpgradeInfo parseWSUpgrade(phr_header *headers, size_t num_headers) {
@@ -221,10 +274,31 @@ void Server::process_web_socket_request(uv_stream_t *client, ssize_t nread,
                                         const uv_buf_t *buf) {
   ClientState *client_state = (ClientState *)client->data;
   RuntimeContext *ctx = (RuntimeContext *)client->loop->data;
-  // std::cout << "Receiving request " << nread << std::endl;
   WebSocket* ws = client_state->activeWs;
-  ws->onMessage();
+
+  ReadBuffer *rb = (ReadBuffer *)buf->base; // Need to release this
+  rb->len = nread;
+  client_ops::recv_new_buffer(client_state, rb);
+  // ws->onMessage();
+  char buffer_data[client_state->recv_len];
+  client_ops::flatten_buffer(client_state, buffer_data);
+  Frame f;
+  size_t op = parseFrame((const uint8_t*)buffer_data, client_state->recv_len, f);
+  if (op == 0){
+    return; 
+  }
   client_ops::clear_buffer(client_state, ctx);
+  switch (f.opcode) {
+    case 1: {
+      std::string msg((char*)f.payload, f.len);
+      ws->onMessage(msg);
+      break;
+    }
+ 
+    case 2: { //WebSocket stream binary data
+      break;
+    }
+  }
 }
 // Web Socket is initialized...client side
 void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
