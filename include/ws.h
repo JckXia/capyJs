@@ -17,8 +17,8 @@ struct WebSocket {
   const std::string ON_MESSAGE_JS_KEY = "onMessage";
   JSValue sock_js;
   uv_stream_t *cli;
-  void onMessage(const std::string &s);
+ 
   int onMessage(const char *buffer, int buf_len);
-  void send_frame();
+  void send_frame(const char * frame_data);
   void complete_protocol_upgrade_handshake(const std::string &exchange_key);
 };

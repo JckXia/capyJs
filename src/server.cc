@@ -279,8 +279,6 @@ void Server::process_web_socket_request(uv_stream_t *client, ssize_t nread,
   ReadBuffer *rb = (ReadBuffer *)buf->base; // Need to release this
   rb->len = nread;
   client_ops::recv_new_buffer(client_state, rb);
-
-  // ws->onMessage();
   char buffer_data[client_state->recv_len];
   client_ops::flatten_buffer(client_state, buffer_data);
   int rc = ws->onMessage(buffer_data, client_state->recv_len);

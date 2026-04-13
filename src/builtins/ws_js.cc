@@ -18,9 +18,8 @@ static JSValue send(JSContext *ctx, JSValueConst this_val, int argc,
   JSRuntime *rt = JS_GetRuntime(ctx);
   RuntimeContext *env =
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
-  const char *body = JS_ToCString(ctx, argv[0]);
-  size_t len = strlen(body);
-    
+  const char *data = JS_ToCString(ctx, argv[0]);
+  ws->send_frame(data);
   return JS_UNDEFINED;
 }
 
