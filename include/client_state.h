@@ -10,13 +10,15 @@ struct ReadBuffer {
 };
 
 enum ConnectionProtocol : uint8_t {
-  TYPE_UNKNOWN = 0,
+  TYPE_UNKNOWN_CONN = 0,
   TYPE_HTTP_1 = 1,
   TYPE_WEB_SOCKET = 2
 };
 
 static const char *CONN_PROTOCOL[] = {"Unknown", "HTTP_1.1", "WebSocket"};
 
+// TODO: We are stuffing QuickJS into ClientState. Not sure if this is a "good" idea
+//  -> For perf sake we'll just hack it rn?
 struct ClientState {
   uv_tcp_t socket;
   uv_write_t write_handle;

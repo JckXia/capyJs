@@ -6,8 +6,41 @@
 #include <string>
 #include "ws.h"
 #include "util.h"
-
+#include "types.h"
 Server::Server() {}
+
+WSUpgradeInfo parseWSUpgrade(phr_header* headers, size_t num_headers) {
+    WSUpgradeInfo info = {false, "", "", ""};
+    
+    bool hasUpgrade = false;
+    bool hasConnection = false;
+    
+    for (size_t i = 0; i < num_headers; i++) {
+        std::string name(headers[i].name, headers[i].name_len);
+        std::string value(headers[i].value, headers[i].value_len);
+        
+        // Case-insensitive compare
+        if (name.size() == 7 && strncasecmp(name.c_str(), "Upgrade", 7) == 0) {
+            hasUpgrade = (strncasecmp(value.c_str(), "websocket", 9) == 0);
+        }
+        else if (name.size() == 10 && strncasecmp(name.c_str(), "Connection", 10) == 0) {
+            // Connection might be "Upgrade" or "keep-alive, Upgrade"
+            hasConnection = (strcasestr(value.c_str(), "upgrade") != nullptr);
+        }
+        else if (name.size() == 17 && strncasecmp(name.c_str(), "Sec-WebSocket-Key", 17) == 0) {
+            info.key = value;
+        }
+        else if (name.size() == 21 && strncasecmp(name.c_str(), "Sec-WebSocket-Version", 21) == 0) {
+            info.version = value;
+        }
+        else if (name.size() == 22 && strncasecmp(name.c_str(), "Sec-WebSocket-Protocol", 22) == 0) {
+            info.protocol = value;
+        }
+    }
+    
+    info.isUpgrade = hasUpgrade && hasConnection && !info.key.empty();
+    return info;
+}
 void Server::init_client_socket(ClientState *client_state) {
   uv_tcp_t *client_sock = &client_state->socket;
   client_sock->data = client_state;
@@ -151,12 +184,7 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
     uv_read_stop(client);
     return;
   }
-  WSUpgradeInfo ws = parseWSUpgrade(headers, num_headers);
 
-  if (ws.isUpgrade) {
-    std::string accept = compute_ws_accept_key(ws.key);
-    std::cout<<"Computed exchange key " << accept << std::endl;
-  }
   client_state->write_in_flight = true;
 
   RequestObject req;
@@ -292,6 +320,10 @@ void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
 void Server::registerFuncHandler(const char *method, const char *uri,
                                  Handler handler) {
   this->_env->http_ctx->register_api_function(method, uri, handler);
+}
+
+void Server::registerWsFuncHandler(const char * uri, WSHandler handler) {
+  this->_env->http_ctx->register_ws_cb(uri, handler);
 }
 
 Server::Server(int portNum, const char *portAddr)

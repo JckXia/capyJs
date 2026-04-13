@@ -26,6 +26,8 @@ public:
   explicit Server(int portNum, const char *portAddr); // More options later
   void registerFuncHandler(const char *method, const char *uri,
                            Handler handler);
+  
+  void registerWsFuncHandler(const char* uri, WSHandler handler);
 
   int run();
 

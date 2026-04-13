@@ -54,12 +54,14 @@ add_executable(capy
  src/builtins/fs.cc
  src/allocator.cc
  src/http_message.cc
+ src/ws.cc
  src/builtins/builtins.cc
  src/builtins/console.cc
  src/builtins/request.cc
  src/builtins/response.cc
  src/builtins/server_js.cc
  src/builtins/timer.cc
+ src/builtins/ws_js.cc
 )
  
 add_library(server src/server.cc)
