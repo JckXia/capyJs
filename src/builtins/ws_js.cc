@@ -20,6 +20,7 @@ static JSValue send(JSContext *ctx, JSValueConst this_val, int argc,
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
   const char *data = JS_ToCString(ctx, argv[0]);
   ws->send_frame(data);
+  JS_FreeCString(ctx, data);
   return JS_UNDEFINED;
 }
 

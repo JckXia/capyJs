@@ -6,6 +6,7 @@
 #include "util.h"
 #include "ws.h"
 #include <map>
+#include "quickjs.h"
 #include <string>
 
 // struct Frame {
@@ -116,6 +117,11 @@ void Server::on_client_closed_cb(uv_handle_t *handle) {
   ClientState *client = (ClientState *)client_sock->data;
   client->closing = true;
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
+ 
+  if (client->activeWs) {
+    JS_FreeValue(ctx->js_ctx, client->activeWs->sock_js);
+    ctx->sock_alloc->release(client->activeWs);
+  }
   ctx->allocator->release(client);
 }
 

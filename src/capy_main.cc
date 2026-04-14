@@ -40,7 +40,7 @@ void tear_down_runtime_env(RuntimeContext *env, JSContext *ctx) {
   for (JSValue v : env->timer_ctx->registered_cb) {
     JS_FreeValue(ctx, v);
   }
-
+  JS_RunGC(rt);
   JS_FreeContext(ctx);
   JS_FreeRuntime(rt);
   uv_loop_close(env->loop);
@@ -111,7 +111,7 @@ int main(int argc, char **argv) {
   }
 
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-
+  
   free(code);
   tear_down_runtime_env(&env, ctx);
 }

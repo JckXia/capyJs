@@ -103,16 +103,17 @@ int WebSocket::onMessage(const char *buffer, int buf_len) {
   }
 
   RuntimeContext *env = (RuntimeContext *)cli->loop->data;
-  JSValue js = this->sock_js;
-  JSValue onmessage = JS_GetPropertyStr(env->js_ctx, js, "onMessage");
+  JSValue onmessage = JS_GetPropertyStr(env->js_ctx, this->sock_js, "onMessage");
 
   if (JS_IsFunction(env->js_ctx, onmessage)) {
     switch (f.opcode) {
     case 1: {
       std::string frame_data((char *)f.payload, f.len);
       JSValue payload = JS_NewString(env->js_ctx, frame_data.c_str());
-      JS_Call(env->js_ctx, onmessage, js, 1, &payload);
+      JSValue retVal = JS_Call(env->js_ctx, onmessage, this->sock_js, 1, &payload);
       JS_FreeValue(env->js_ctx, payload);
+      JS_FreeValue(env->js_ctx, retVal);
+      break;
     }
 
     default: {
@@ -120,6 +121,7 @@ int WebSocket::onMessage(const char *buffer, int buf_len) {
     }
     }
   }
+  JS_FreeValue(env->js_ctx, onmessage);
 
   return op;
 }
