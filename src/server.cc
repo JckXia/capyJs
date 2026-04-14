@@ -2,64 +2,12 @@
 #include "client_op.h"
 #include "client_state.h"
 #include "picohttpparser.h"
+#include "quickjs.h"
 #include "types.h"
 #include "util.h"
 #include "ws.h"
 #include <map>
-#include "quickjs.h"
 #include <string>
-
-// struct Frame {
-//     bool fin;
-//     uint8_t opcode;
-//     uint8_t* payload;
-//     size_t len;
-// };
-
-// // Returns bytes consumed, 0 if need more data
-// size_t parseFrame(const uint8_t* data, size_t len, Frame& frame) {
-//     if (len < 2) return 0;
-
-//     frame.fin = data[0] & 0x80;
-//     frame.opcode = data[0] & 0x0F;
-
-//     bool masked = data[1] & 0x80;
-//     uint64_t payload_len = data[1] & 0x7F;
-
-//     size_t offset = 2;
-
-//     if (payload_len == 126) {
-//         if (len < 4) return 0;
-//         payload_len = (data[2] << 8) | data[3];
-//         offset = 4;
-//     } else if (payload_len == 127) {
-//         if (len < 10) return 0;
-//         payload_len = 0;
-//         for (int i = 0; i < 8; i++) {
-//             payload_len = (payload_len << 8) | data[2 + i];
-//         }
-//         offset = 10;
-//     }
-
-//     size_t mask_offset = offset;
-//     if (masked) offset += 4;
-
-//     size_t total = offset + payload_len;
-//     if (len < total) return 0;  // need more data
-
-//     // Unmask in place (client->server is always masked)
-//     frame.payload = (uint8_t*)data + offset;
-//     frame.len = payload_len;
-
-//     if (masked) {
-//         const uint8_t* mask = data + mask_offset;
-//         for (size_t i = 0; i < payload_len; i++) {
-//             frame.payload[i] ^= mask[i % 4];
-//         }
-//     }
-
-//     return total;
-// }
 
 Server::Server() {}
 
@@ -117,7 +65,7 @@ void Server::on_client_closed_cb(uv_handle_t *handle) {
   ClientState *client = (ClientState *)client_sock->data;
   client->closing = true;
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
- 
+
   if (client->activeWs) {
     JS_FreeValue(ctx->js_ctx, client->activeWs->sock_js);
     ctx->sock_alloc->release(client->activeWs);
