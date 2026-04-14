@@ -18,7 +18,6 @@ struct HttpContext {
   std::map<std::string, MappedFile> static_files;
   std::map<std::pair<std::string, std::string>, Handler> routes_; // Register using routes_
   std::map<std::string, WSHandler> ws_routes_;
-  std::map<std::string, WebSocket*> ws_mapping_; // Maps the uri to the actual WebSocket object handling requests
   
   void register_api_function(const char *method, const char *uri,
                              Handler handler) {
