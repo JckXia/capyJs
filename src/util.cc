@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 char *read_file(const char *filename, size_t *out_len) {
   FILE *f = fopen(filename, "rb");
   if (!f) {
@@ -116,4 +117,48 @@ std::string compute_ws_accept_key(const std::string &incoming_sec_key) {
   uint8_t digest[20];
   sha1((const uint8_t *)combined.data(), combined.size(), digest);
   return base64(digest, 20);
+}
+
+const char *get_file_extension(const char *filename) {
+  if (!filename)
+    return NULL;
+  std::cout << "Get file path " << filename << "\n";
+  const char *dot = strrchr(filename, '.');
+  const char *slash = strrchr(filename, '/');      // for Unix paths
+  const char *backslash = strrchr(filename, '\\'); // for Windows paths
+
+  // Find the last path separator
+  const char *last_sep = slash > backslash ? slash : backslash;
+
+  // Conditions:
+  // 1. No dot found
+  // 2. Dot is before last path separator (so it's part of a folder name)
+  // 3. Dot is the first character (hidden files like ".bashrc")
+  if (!dot || (last_sep && dot < last_sep) || dot == filename) {
+    return NULL;
+  }
+
+  return dot + 1;
+}
+
+const char *get_content_type(const char *ext) {
+  // std::cout<<"Fetch file "<< ext<<
+  std::cout << "Fetch file ext " << ext << "\n";
+  if (strncmp(ext, "js", 2) == 0) {
+    return "text/javascript";
+  }
+
+  if (strncmp(ext, "html", 4) == 0) {
+    return "text/html";
+  }
+
+  if (strncmp(ext, "ico", 3) == 0) {
+    return "image/vnd.microsoft.icon";
+  }
+
+  if (strncmp(ext, "css", 3) == 0) {
+    return "text/css";
+  }
+
+  return "text/plaintext";
 }
