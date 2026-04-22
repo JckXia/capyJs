@@ -2,11 +2,13 @@
 #include "builtins.h"
 #include "quickjs.h"
 #include "server.h"
+#include "types.h"
+#include "util.h"
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "types.h"
+
 static void server_finalizer(JSRuntime *rt, JSValue val) {
   Server *server = (Server *)JS_GetOpaque(val, server_class_id);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
@@ -86,14 +88,13 @@ static JSValue register_ws_url(JSContext *ctx, JSValueConst this_val, int argc,
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
   JSValue callback = JS_DupValue(ctx, argv[1]);
 
-  server->registerWsFuncHandler(
-       uri, [ctx, callback](WebSocket& ws) {
-        JSValue js_ws = JS_NewObjectClass(ctx, web_socket_class_id);
-        JS_SetOpaque(js_ws, &ws);
-        JSValue args[] = {js_ws};
-        ws.sock_js = js_ws;
-        JS_Call(ctx, callback, JS_UNDEFINED, 1, args);
-        // JS_FreeValue(ctx, js_ws);
+  server->registerWsFuncHandler(uri, [ctx, callback](WebSocket &ws) {
+    JSValue js_ws = JS_NewObjectClass(ctx, web_socket_class_id);
+    JS_SetOpaque(js_ws, &ws);
+    JSValue args[] = {js_ws};
+    ws.sock_js = js_ws;
+    JS_Call(ctx, callback, JS_UNDEFINED, 1, args);
+    // JS_FreeValue(ctx, js_ws);
   });
   JS_FreeCString(ctx, uri);
   env->http_ctx->registerd_cb.push_back(callback);
@@ -134,7 +135,7 @@ static JSValue server_serve_static(JSContext *ctx, JSValueConst this_val,
   server->registerFuncHandler(
       "GET", uri, [env, fp](RequestObject &req, ResponseObject &res) {
         MappedFile f = env->http_ctx->static_files[fp];
-        res.headers["Content-Type"] = "text/html";
+        res.headers["Content-Type"] = get_content_type(get_file_extension(fp));
         res.header_size += (strlen("text/html") + strlen("Content-Type"));
 
         res.is_static = true;
@@ -156,7 +157,6 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
   JSRuntime *rt = JS_GetRuntime(ctx);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
 
- 
   Server *server = (Server *)env->allocator->alloc(sizeof(Server));
   // TODO: Error handling, possibly throw an exception
   server->setEnv(env);
