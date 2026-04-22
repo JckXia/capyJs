@@ -67,8 +67,10 @@ void Server::on_client_closed_cb(uv_handle_t *handle) {
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
 
   if (client->activeWs) {
+    client->activeWs->onClose();
     JS_FreeValue(ctx->js_ctx, client->activeWs->sock_js);
     ctx->sock_alloc->release(client->activeWs);
+    client->activeWs = nullptr;
   }
   ctx->allocator->release(client);
 }

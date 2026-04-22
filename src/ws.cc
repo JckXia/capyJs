@@ -61,38 +61,46 @@ size_t parseFrame(const uint8_t *data, size_t len, Frame &frame) {
   return total;
 }
 
-void sendFrame(WebSocket& ws, const uint8_t* payload, size_t len, uint8_t opcode = 0x2) {
-    std::vector<uint8_t> frame;
-    
-    // First byte: FIN + opcode
-    frame.push_back(0x80 | opcode);  // FIN=1, no fragmentation
-    
-    // Length (server->client: no mask)
-    if (len <= 125) {
-        frame.push_back(len);
-    } else if (len <= 65535) {
-        frame.push_back(126);
-        frame.push_back((len >> 8) & 0xFF);
-        frame.push_back(len & 0xFF);
-    } else {
-        frame.push_back(127);
-        for (int i = 7; i >= 0; i--) {
-            frame.push_back((len >> (i * 8)) & 0xFF);
-        }
+void sendFrame(WebSocket &ws, const uint8_t *payload, size_t len,
+               uint8_t opcode = 0x2) {
+  std::vector<uint8_t> frame;
+
+  // First byte: FIN + opcode
+  frame.push_back(0x80 | opcode); // FIN=1, no fragmentation
+
+  // Length (server->client: no mask)
+  if (len <= 125) {
+    frame.push_back(len);
+  } else if (len <= 65535) {
+    frame.push_back(126);
+    frame.push_back((len >> 8) & 0xFF);
+    frame.push_back(len & 0xFF);
+  } else {
+    frame.push_back(127);
+    for (int i = 7; i >= 0; i--) {
+      frame.push_back((len >> (i * 8)) & 0xFF);
     }
-    
-    frame.insert(frame.end(), payload, payload + len);
-    
-    uv_buf_t buf = uv_buf_init((char*)frame.data(), frame.size());
-    uv_write_t* req = new uv_write_t;
-    uv_write(req, (uv_stream_t*)ws.cli, &buf, 1, [](uv_write_t* req, int status) {
-        delete req;
-    });
+  }
+
+  frame.insert(frame.end(), payload, payload + len);
+
+  uv_buf_t buf = uv_buf_init((char *)frame.data(), frame.size());
+  uv_write_t *req = new uv_write_t;
+  uv_write(req, (uv_stream_t *)ws.cli, &buf, 1,
+           [](uv_write_t *req, int status) { delete req; });
 }
 
-void WebSocket::send_frame(const char * frame_payload) {
-   std::cout<<"Sending back some data " << frame_payload<< std::endl;
-   sendFrame(*this, (const uint8_t*) frame_payload, strlen(frame_payload), 1);
+void WebSocket::send_frame(const char *frame_payload) {
+  std::cout << "Sending back some data " << frame_payload << std::endl;
+  sendFrame(*this, (const uint8_t *)frame_payload, strlen(frame_payload), 1);
+}
+void WebSocket::onClose() {
+  RuntimeContext *env = (RuntimeContext *)cli->loop->data;
+  JSValue onclose = JS_GetPropertyStr(env->js_ctx, this->sock_js, "onClose");
+  if (JS_IsFunction(env->js_ctx, onclose)) {
+    JS_Call(env->js_ctx, onclose, this->sock_js, 0, nullptr);
+  }
+  JS_FreeValue(env->js_ctx, onclose);
 }
 
 int WebSocket::onMessage(const char *buffer, int buf_len) {
@@ -103,14 +111,16 @@ int WebSocket::onMessage(const char *buffer, int buf_len) {
   }
 
   RuntimeContext *env = (RuntimeContext *)cli->loop->data;
-  JSValue onmessage = JS_GetPropertyStr(env->js_ctx, this->sock_js, "onMessage");
+  JSValue onmessage =
+      JS_GetPropertyStr(env->js_ctx, this->sock_js, "onMessage");
 
   if (JS_IsFunction(env->js_ctx, onmessage)) {
     switch (f.opcode) {
     case 1: {
       std::string frame_data((char *)f.payload, f.len);
       JSValue payload = JS_NewString(env->js_ctx, frame_data.c_str());
-      JSValue retVal = JS_Call(env->js_ctx, onmessage, this->sock_js, 1, &payload);
+      JSValue retVal =
+          JS_Call(env->js_ctx, onmessage, this->sock_js, 1, &payload);
       JS_FreeValue(env->js_ctx, payload);
       JS_FreeValue(env->js_ctx, retVal);
       break;
