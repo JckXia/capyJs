@@ -9,7 +9,6 @@ struct RequestObject {
   char uri[20];
 };
 
-// TODO: Refactor this
 struct ResponseObject {
   size_t response_len = 0;
   char *response_buffer;

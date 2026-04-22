@@ -40,14 +40,16 @@ void tear_down_runtime_env(RuntimeContext *env, JSContext *ctx) {
   for (JSValue v : env->timer_ctx->registered_cb) {
     JS_FreeValue(ctx, v);
   }
-
+  JS_RunGC(rt);
   JS_FreeContext(ctx);
   JS_FreeRuntime(rt);
   uv_loop_close(env->loop);
   uv_library_shutdown();
   env->allocator->verify_no_leaks();
-
+  env->sock_alloc->verify_no_leaks();
+  
   delete env->allocator;
+  delete env->sock_alloc;
 }
 
 int main(int argc, char **argv) {
@@ -86,12 +88,14 @@ int main(int argc, char **argv) {
   env.loop = uv_default_loop();
   env.loop->data = &env;
   env.js_env = rt;
+  env.js_ctx = ctx;
   env.http_ctx = &http_context;
   env.timer_ctx = &timer_ctx;
   env.id_generator = &id_gen;
   env.fs_ctx = &fs_ctx;
   env.allocator = new Allocator(); // Can easily swap with malloc/free or
                                    // straight up jemalloc
+  env.sock_alloc = new Allocator(); // Allocator dedicated for websocket for debugging
 
   JS_SetRuntimeOpaque(rt, &env);
 
@@ -107,7 +111,7 @@ int main(int argc, char **argv) {
   }
 
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-
+  
   free(code);
   tear_down_runtime_env(&env, ctx);
 }

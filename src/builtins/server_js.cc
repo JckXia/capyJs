@@ -6,10 +6,10 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "types.h"
 static void server_finalizer(JSRuntime *rt, JSValue val) {
   Server *server = (Server *)JS_GetOpaque(val, server_class_id);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
-  // env->server_pools->release(server);
   env->allocator->release(server);
 }
 
@@ -74,6 +74,32 @@ static JSValue register_get_url(JSContext *ctx, JSValueConst this_val, int argc,
   return JS_UNDEFINED;
 }
 
+// Init on registration
+static JSValue register_ws_url(JSContext *ctx, JSValueConst this_val, int argc,
+                               JSValueConst *argv) {
+  Server *server = (Server *)JS_GetOpaque2(ctx, this_val, server_class_id);
+  if (!server)
+    return JS_EXCEPTION;
+
+  const char *uri = JS_ToCString(ctx, argv[0]);
+  RuntimeContext *env =
+      (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
+  JSValue callback = JS_DupValue(ctx, argv[1]);
+
+  server->registerWsFuncHandler(
+       uri, [ctx, callback](WebSocket& ws) {
+        JSValue js_ws = JS_NewObjectClass(ctx, web_socket_class_id);
+        JS_SetOpaque(js_ws, &ws);
+        JSValue args[] = {js_ws};
+        ws.sock_js = js_ws;
+        JS_Call(ctx, callback, JS_UNDEFINED, 1, args);
+        // JS_FreeValue(ctx, js_ws);
+  });
+  JS_FreeCString(ctx, uri);
+  env->http_ctx->registerd_cb.push_back(callback);
+  return JS_UNDEFINED;
+}
+
 static JSValue server_listen(JSContext *ctx, JSValueConst this_val, int argc,
                              JSValueConst *argv) {
   Server *server = (Server *)JS_GetOpaque2(ctx, this_val, server_class_id);
@@ -130,7 +156,7 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
   JSRuntime *rt = JS_GetRuntime(ctx);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
 
-  // Server *server = env->server_pools->acquire();
+ 
   Server *server = (Server *)env->allocator->alloc(sizeof(Server));
   // TODO: Error handling, possibly throw an exception
   server->setEnv(env);
@@ -175,6 +201,8 @@ void setup_server_class(JSContext *ctx) {
                     JS_NewCFunction(ctx, register_get_url, "get", 2));
   JS_SetPropertyStr(ctx, server_proto, "listen",
                     JS_NewCFunction(ctx, server_listen, "listen", 2));
+  JS_SetPropertyStr(ctx, server_proto, "ws",
+                    JS_NewCFunction(ctx, register_ws_url, "ws", 2));
   JS_SetPropertyStr(
       ctx, server_proto, "serveStatic",
       JS_NewCFunction(ctx, server_serve_static, "serveStatic", 2));
