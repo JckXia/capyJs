@@ -19,8 +19,10 @@ MappedFile mmap_static_file(const char *path) {
   MappedFile result = {nullptr, 0, -1};
 
   int fd = open(path, O_RDONLY);
-  if (fd < 0)
-    return result;
+  if (fd < 0) {
+    throw std::runtime_error(std::string("Static file not found: ") + path + " — " + strerror(errno));
+  }
+    //return result;
 
   struct stat st;
   if (fstat(fd, &st) < 0) {

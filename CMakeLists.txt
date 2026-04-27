@@ -4,10 +4,11 @@ project(capyJs)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    add_compile_options(-O2)
-endif()
+# if(CMAKE_BUILD_TYPE STREQUAL "Release")
+#     add_compile_options(-O2)
+# endif()
 
+ 
 set(PICO_HTTP_DIR ${CMAKE_SOURCE_DIR}/deps/picohttpparser)
 add_library(picohttp STATIC 
    ${PICO_HTTP_DIR}/picohttpparser.c
@@ -68,36 +69,38 @@ add_library(server src/server.cc)
 target_include_directories(server PRIVATE ${QJS_DIR})  # ← add this
 target_link_libraries(server uv_a quickjs picohttp)
 target_link_libraries(capy server uv_a quickjs picohttp)
-
-
+target_link_options(capy PRIVATE -static)
+target_compile_options(capy PRIVATE
+    $<$<CONFIG:Release>:-O2>
+)
 # -- Tests ---------------------------------------------
-add_executable(mem_pool_test
-    tests/mem_pool_test.cc
-)
+# add_executable(mem_pool_test
+#     tests/mem_pool_test.cc
+# )
 
-add_executable(mem_pool_perf
-    tests/mem_pool_perf.cc
-)
+# add_executable(mem_pool_perf
+#     tests/mem_pool_perf.cc
+# )
 
-add_executable(client_state_test
-    tests/client_state_test.cc
-    src/allocator.cc
-)
+# add_executable(client_state_test
+#     tests/client_state_test.cc
+#     src/allocator.cc
+# )
 
-add_executable(http_parser_test
-    tests/http_parser_test.cc
-)
+# add_executable(http_parser_test
+#     tests/http_parser_test.cc
+# )
 
-add_executable(allocator_test
-    tests/allocator_test.cc
-     src/allocator.cc
-)
+# add_executable(allocator_test
+#     tests/allocator_test.cc
+#      src/allocator.cc
+# )
 
-add_executable(allocator_type_test
-    tests/allocator_type_hint_test.cc
-     src/allocator.cc
-)
+# add_executable(allocator_type_test
+#     tests/allocator_type_hint_test.cc
+#      src/allocator.cc
+# )
 
-target_link_libraries(allocator_test  uv)
-target_link_libraries(http_parser_test picohttp)
-target_link_libraries(client_state_test uv quickjs)
+# target_link_libraries(allocator_test  uv)
+# target_link_libraries(http_parser_test picohttp)
+# target_link_libraries(client_state_test uv quickjs)

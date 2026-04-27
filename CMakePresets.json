@@ -1,0 +1,4 @@
+"cacheVariables": {
+  "CMAKE_EXE_LINKER_FLAGS": "-static",
+  "CMAKE_BUILD_TYPE": "Release"
+}
