@@ -22,6 +22,7 @@ static const char *CONN_PROTOCOL[] = {"Unknown", "HTTP_1.1", "WebSocket"};
 //  -> For perf sake we'll just hack it rn?
 struct ClientState {
   uv_tcp_t socket;
+  uv_timer_t idle_timer;
   uv_write_t write_handle;
   bool write_in_flight = false;
   bool closing = false;

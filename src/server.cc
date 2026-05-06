@@ -8,6 +8,7 @@
 #include "ws.h"
 #include <map>
 #include <string>
+#include <vector>
 
 Server::Server() {}
 
@@ -59,6 +60,20 @@ void Server::on_client_closed_emergency(uv_handle_t *handle) {
   ctx->allocator->release((uv_tcp_t *)handle);
 }
 
+void Server::on_idle_timer_closed_cb(uv_handle_t *handle) {
+  ClientState *client = (ClientState *)handle->data;
+  RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
+  ctx->allocator->release(client);
+}
+
+void Server::on_idle_timeout_cb(uv_timer_t *handle) {
+  ClientState *client = (ClientState *)handle->data;
+  std::cout << "Idle timeout, closing connection\n";
+  if (!uv_is_closing((uv_handle_t *)&client->socket)) {
+    uv_close((uv_handle_t *)&client->socket, on_client_closed_cb);
+  }
+}
+
 void Server::on_client_closed_cb(uv_handle_t *handle) {
   std::cout << "Client closing! \n";
   uv_tcp_t *client_sock = (uv_tcp_t *)handle;
@@ -66,13 +81,18 @@ void Server::on_client_closed_cb(uv_handle_t *handle) {
   client->closing = true;
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
 
+  client_ops::clear_buffer(client, ctx);
+
   if (client->activeWs) {
     client->activeWs->onClose();
     JS_FreeValue(ctx->js_ctx, client->activeWs->sock_js);
     ctx->sock_alloc->release(client->activeWs);
     client->activeWs = nullptr;
   }
-  ctx->allocator->release(client);
+
+  uv_timer_stop(&client->idle_timer);
+  uv_close((uv_handle_t *)&client->idle_timer, on_idle_timer_closed_cb);
+  // ClientState is released in on_idle_timer_closed_cb once the timer handle is fully closed
 }
 
 void Server::on_write_cb(uv_write_t *req, int status) {
@@ -160,8 +180,8 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
 
   client_ops::recv_new_buffer(client_state, rb);
 
-  char buffer_data[client_state->recv_len];
-  client_ops::flatten_buffer(client_state, buffer_data);
+  std::vector<char> buffer_data(client_state->recv_len);
+  client_ops::flatten_buffer(client_state, buffer_data.data());
 
   const char *method;
   const char *path;
@@ -172,7 +192,7 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
   size_t path_len = 0;
   size_t num_headers = 100;
 
-  ssize_t pret = phr_parse_request(buffer_data, client_state->recv_len, &method,
+  ssize_t pret = phr_parse_request(buffer_data.data(), client_state->recv_len, &method,
                                    &method_len, &path, &path_len,
                                    &minor_version, headers, &num_headers, 0);
 
@@ -235,9 +255,9 @@ void Server::process_web_socket_request(uv_stream_t *client, ssize_t nread,
   ReadBuffer *rb = (ReadBuffer *)buf->base; // Need to release this
   rb->len = nread;
   client_ops::recv_new_buffer(client_state, rb);
-  char buffer_data[client_state->recv_len];
-  client_ops::flatten_buffer(client_state, buffer_data);
-  int rc = ws->onMessage(buffer_data, client_state->recv_len);
+  std::vector<char> buffer_data(client_state->recv_len);
+  client_ops::flatten_buffer(client_state, buffer_data.data());
+  int rc = ws->onMessage(buffer_data.data(), client_state->recv_len);
 
   if (rc == 0) {
     return;
@@ -252,6 +272,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
   RuntimeContext *ctx = (RuntimeContext *)client->loop->data;
 
   if (nread > 0) {
+    uv_timer_again(&client_state->idle_timer);
 
     switch (client_state->conn_protocol) {
     case ConnectionProtocol::TYPE_HTTP_1:
@@ -339,6 +360,9 @@ void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
 
   init_client_state(client);
   init_client_socket(client);
+  uv_timer_init(env->loop, &client->idle_timer);
+  client->idle_timer.data = client;
+  uv_timer_start(&client->idle_timer, on_idle_timeout_cb, IDLE_TIMEOUT_MS, IDLE_TIMEOUT_MS);
 
   if (uv_accept(server_stream, (uv_stream_t *)&client->socket) ==
       0) { // start listening to incoming requests

@@ -23,30 +23,28 @@ static JSValue fs_constructor(JSContext *ctx, JSValueConst new_target, int argc,
 }
 
 struct FsCb {
-  FileSystem * fs;
-  JSContext * ctx;
-  char *buf;
+  JSContext *ctx;
+  JSValue js_cb;
+  char *buf;     // null for open operations
+  uv_fs_t *req; // owned — freed in the callback
 };
 
-static void open_file_async_cb(uv_fs_t * req) {
-  FsCb * fs_with_ctx = (FsCb*) req->data;
+static void open_file_async_cb(uv_fs_t *req) {
+  FsCb *fs_with_ctx = (FsCb *)req->data;
   JSContext *ctx = fs_with_ctx->ctx;
-  FileSystem* fs = fs_with_ctx->fs;
-  
+
   JSValue args[] = {JS_UNDEFINED, JS_NewInt64(ctx, req->result)};
-  JS_Call(ctx, fs->open_cb, JS_UNDEFINED, 2, args);
-  
-  JS_FreeValue(ctx, fs->open_cb);
-  uv_fs_req_cleanup(fs->open_req);
-  free(fs->open_req);
-  delete(fs_with_ctx);
+  JS_Call(ctx, fs_with_ctx->js_cb, JS_UNDEFINED, 2, args);
+
+  JS_FreeValue(ctx, fs_with_ctx->js_cb);
+  uv_fs_req_cleanup(req);
+  free(fs_with_ctx->req);
+  delete fs_with_ctx;
 }
 
-
-static void read_file_async_cb(uv_fs_t * req) {
-  FsCb * fs_with_ctx = (FsCb*) req->data;
+static void read_file_async_cb(uv_fs_t *req) {
+  FsCb *fs_with_ctx = (FsCb *)req->data;
   JSContext *ctx = fs_with_ctx->ctx;
-  FileSystem* fs = fs_with_ctx->fs;
 
   JSValue err, data;
   if (req->result < 0) {
@@ -57,19 +55,27 @@ static void read_file_async_cb(uv_fs_t * req) {
     data = JS_NewStringLen(ctx, fs_with_ctx->buf, (size_t)req->result);
   }
   JSValue args[] = {err, data};
-  JS_Call(ctx, fs->read_cb, JS_UNDEFINED, 2, args);
+  JS_Call(ctx, fs_with_ctx->js_cb, JS_UNDEFINED, 2, args);
 
-  JS_FreeValue(ctx, fs->read_cb);
-  uv_fs_req_cleanup(fs->read_req);
-  free(fs->read_req);
-  delete [] fs_with_ctx->buf;
+  JS_FreeValue(ctx, fs_with_ctx->js_cb);
+  uv_fs_req_cleanup(req);
+  free(fs_with_ctx->req);
+  delete[] fs_with_ctx->buf;
   delete fs_with_ctx;
 }
 
-static JSValue close_file_async(JSContext* ctx, JSValueConst this_val, int argc,  JSValueConst *argv) { 
+static void close_file_async_cb(uv_fs_t *req) {
+  uv_fs_req_cleanup(req);
+  free(req);
+}
+
+static JSValue close_file_async(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
   int64_t fd;
-  JS_ToInt64(ctx, &fd, argv[0]); 
-  JS_FreeValue(ctx, argv[0]);
+  JS_ToInt64(ctx, &fd, argv[0]);
+
+  RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
+  uv_fs_t *close_req = (uv_fs_t *)malloc(sizeof(uv_fs_t));
+  uv_fs_close(env->loop, close_req, (uv_file)fd, close_file_async_cb);
   return JS_UNDEFINED;
 }
 
@@ -79,20 +85,18 @@ static JSValue open_file_async(JSContext* ctx, JSValueConst this_val, int argc, 
 
   FileSystem * fs = (FileSystem*)JS_GetOpaque2(ctx, this_val, fs_class_id);
   
-  FsCb * fs_with_ctx = new FsCb();
-  fs_with_ctx->fs = fs;
+  uv_fs_t *open_req = (uv_fs_t *)malloc(sizeof(uv_fs_t));
+  FsCb *fs_with_ctx = new FsCb();
   fs_with_ctx->ctx = ctx;
-
-  uv_fs_t* open_req =  (uv_fs_t*)malloc(sizeof(uv_fs_t));
+  fs_with_ctx->js_cb = jsOpenCb;
+  fs_with_ctx->buf = nullptr;
+  fs_with_ctx->req = open_req;
   fs->filepath = fp;
-  fs->open_req = open_req;
-  fs->open_cb = jsOpenCb;
- 
   open_req->data = fs_with_ctx;
 
   RuntimeContext *env =
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
-  uv_fs_open(env->loop, open_req, fp,O_RDONLY, 0, open_file_async_cb);
+  uv_fs_open(env->loop, open_req, fp, O_RDONLY, 0, open_file_async_cb);
   return JS_UNDEFINED;
 }
 
@@ -109,17 +113,17 @@ static JSValue read_file_async(JSContext * ctx, JSValueConst this_val, int argc 
   JS_ToInt32(ctx, &buff_len, argv[1]);
   JSValue js_cb = JS_DupValue(ctx, argv[2]);
 
-  char * buf = new char[buff_len];
+  char *buf = new char[buff_len];
   uv_buf_t uvbuf = uv_buf_init(buf, buff_len);
-  fs->read_req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
-  fs->read_cb = js_cb;
-  FsCb * fs_with_ctx = new FsCb();
-  fs_with_ctx->fs = fs;
+  uv_fs_t *read_req = (uv_fs_t *)malloc(sizeof(uv_fs_t));
+  FsCb *fs_with_ctx = new FsCb();
   fs_with_ctx->ctx = ctx;
+  fs_with_ctx->js_cb = js_cb;
   fs_with_ctx->buf = buf;
-  fs->read_req->data = fs_with_ctx;
-  
-  uv_fs_read(env->loop, fs->read_req, fd, &uvbuf, 1,0, read_file_async_cb);
+  fs_with_ctx->req = read_req;
+  read_req->data = fs_with_ctx;
+
+  uv_fs_read(env->loop, read_req, fd, &uvbuf, 1, 0, read_file_async_cb);
   return JS_UNDEFINED;
 }
 
