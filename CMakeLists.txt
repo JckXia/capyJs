@@ -1,14 +1,15 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
 project(capyJs)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# if(CMAKE_BUILD_TYPE STREQUAL "Release")
-#     add_compile_options(-O2)
-# endif()
+option(CAPY_STATIC "Statically link the capy executable" OFF)
 
- 
+# Use -O2 for release instead of CMake's default -O3
+set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "" FORCE)
+set(CMAKE_C_FLAGS_RELEASE   "-O2 -DNDEBUG" CACHE STRING "" FORCE)
+
 set(PICO_HTTP_DIR ${CMAKE_SOURCE_DIR}/deps/picohttpparser)
 add_library(picohttp STATIC 
    ${PICO_HTTP_DIR}/picohttpparser.c
@@ -69,10 +70,9 @@ add_library(server src/server.cc)
 target_include_directories(server PRIVATE ${QJS_DIR})  # ← add this
 target_link_libraries(server uv_a quickjs picohttp)
 target_link_libraries(capy server uv_a quickjs picohttp)
-target_link_options(capy PRIVATE -static)
-target_compile_options(capy PRIVATE
-    $<$<CONFIG:Release>:-O2>
-)
+if(CAPY_STATIC)
+    target_link_options(capy PRIVATE -static)
+endif()
 # -- Tests ---------------------------------------------
 # add_executable(mem_pool_test
 #     tests/mem_pool_test.cc

@@ -1,4 +1,55 @@
-"cacheVariables": {
-  "CMAKE_EXE_LINKER_FLAGS": "-static",
-  "CMAKE_BUILD_TYPE": "Release"
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Development (x86, Debug, dynamic)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CAPY_STATIC": "OFF"
+      }
+    },
+    {
+      "name": "release-x86",
+      "displayName": "Release (x86, static)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-release-x86",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CAPY_STATIC": "ON"
+      }
+    },
+    {
+      "name": "release-arm64",
+      "displayName": "Release (ARM64 cross-compile, static)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-release-arm64",
+      "toolchainFile": "${sourceDir}/toolchain-aarch64.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CAPY_STATIC": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "release-x86",
+      "configurePreset": "release-x86"
+    },
+    {
+      "name": "release-arm64",
+      "configurePreset": "release-arm64"
+    }
+  ]
 }

@@ -48,13 +48,21 @@ static void read_file_async_cb(uv_fs_t * req) {
   JSContext *ctx = fs_with_ctx->ctx;
   FileSystem* fs = fs_with_ctx->fs;
 
-  JSValue args[] = {JS_UNDEFINED, JS_NewStringLen(ctx, fs_with_ctx->buf, req->result)};
+  JSValue err, data;
+  if (req->result < 0) {
+    err  = JS_NewInt32(ctx, (int)req->result);
+    data = JS_UNDEFINED;
+  } else {
+    err  = JS_UNDEFINED;
+    data = JS_NewStringLen(ctx, fs_with_ctx->buf, (size_t)req->result);
+  }
+  JSValue args[] = {err, data};
   JS_Call(ctx, fs->read_cb, JS_UNDEFINED, 2, args);
 
   JS_FreeValue(ctx, fs->read_cb);
   uv_fs_req_cleanup(fs->read_req);
   free(fs->read_req);
-  delete fs_with_ctx->buf;
+  delete [] fs_with_ctx->buf;
   delete fs_with_ctx;
 }
 
