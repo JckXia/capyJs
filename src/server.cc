@@ -209,7 +209,7 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
   }
 
   if (client_state->write_in_flight || client_state->closing == true) {
-    ctx->allocator->release(rb);
+    client_ops::clear_buffer(client_state, ctx);
     uv_read_stop(client);
     return;
   }
@@ -219,11 +219,14 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
   RequestObject req;
   ResponseObject *res = new ResponseObject();
 
-  memcpy(req.verb, method, method_len);
-  memcpy(req.uri, path, path_len);
+  size_t safe_verb_len = std::min(method_len, sizeof(req.verb) - 1);
+  size_t safe_uri_len  = std::min(path_len,   sizeof(req.uri)  - 1);
+  memcpy(req.verb, method, safe_verb_len);
+  memcpy(req.uri,  path,   safe_uri_len);
+  req.verb[safe_verb_len] = '\0';
+  req.uri[safe_uri_len]   = '\0';
 
-  req.verb[method_len] = '\0';
-  req.uri[path_len] = '\0';
+  std::cout << req.verb << " " << req.uri << "\n";
 
   client_ops::clear_buffer(client_state, ctx);
 

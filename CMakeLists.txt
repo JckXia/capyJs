@@ -5,10 +5,16 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(CAPY_STATIC "Statically link the capy executable" OFF)
+option(CAPY_ASAN   "Build with AddressSanitizer"          OFF)
 
 # Use -O2 for release instead of CMake's default -O3
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "" FORCE)
 set(CMAKE_C_FLAGS_RELEASE   "-O2 -DNDEBUG" CACHE STRING "" FORCE)
+
+if(CAPY_ASAN)
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g -O1)
+    add_link_options(-fsanitize=address)
+endif()
 
 set(PICO_HTTP_DIR ${CMAKE_SOURCE_DIR}/deps/picohttpparser)
 add_library(picohttp STATIC 

@@ -62,6 +62,7 @@ void ResponseObject::on_write_cb(uv_write_t *req, int status) {
 void ResponseObject::send() {
   ClientState *client_state = (ClientState *)cli->data;
   RuntimeContext *ctx = (RuntimeContext *)cli->loop->data;
+ 
   if (client_state->closing == true) {
     return;
   }
@@ -98,4 +99,47 @@ void ResponseObject::send() {
     }
     delete (this);
   }
+}
+
+void ResponseObject::on_shutdown_cb(uv_shutdown_t* req, int status) {
+  ClientState *client_state = (ClientState *)req->data;
+  client_state->write_in_flight = false;
+  uv_read_start((uv_stream_t *)&client_state->socket,
+                Server::on_alloc_buffer_cb, Server::on_read_cb);
+  free(req);
+}
+
+static void on_abort_shutdown_cb(uv_shutdown_t *req, int status) {
+  ClientState *client_state = (ClientState *)req->data;
+  free(req);
+  uv_close((uv_handle_t *)&client_state->socket, Server::on_client_closed_cb);
+}
+
+static void on_abort_write_cb(uv_write_t *req, int status) {
+  uv_shutdown_t *sr = (uv_shutdown_t *)malloc(sizeof(uv_shutdown_t));
+  sr->data = req->data;
+  uv_shutdown(sr, req->handle, on_abort_shutdown_cb);
+}
+
+void ResponseObject::abort() {
+  ClientState *client_state = (ClientState *)cli->data;
+  if (client_state->closing == true) {
+    return;
+  }
+
+  static const char resp[] =
+    "HTTP/1.1 503 Service Unavailable\r\n"
+    "Connection: close\r\n"
+    "Content-Length: 0\r\n"
+    "\r\n";
+  uv_write_t *write_handle = &client_state->write_handle;
+  write_handle->data = client_state;
+  uv_buf_t buf = uv_buf_init(const_cast<char *>(resp), sizeof(resp) - 1);
+  int rc;
+  if ((rc = uv_write(write_handle, cli, &buf, 1, on_abort_write_cb)) < 0) {
+    std::cout << "abort write failed: " << uv_strerror(rc) << std::endl;
+    uv_close((uv_handle_t *)&client_state->socket, Server::on_client_closed_cb);
+  }
+
+  delete this;
 }

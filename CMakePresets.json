@@ -36,6 +36,29 @@
         "CMAKE_BUILD_TYPE": "Release",
         "CAPY_STATIC": "ON"
       }
+    },
+    {
+      "name": "asan",
+      "displayName": "ASan (x86, debug)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-sanitize",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CAPY_STATIC": "OFF",
+        "CAPY_ASAN": "ON"
+      }
+    },
+    {
+      "name": "asan-arm64",
+      "displayName": "ASan (ARM64 cross-compile)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-sanitize-arm64",
+      "toolchainFile": "${sourceDir}/toolchain-aarch64.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CAPY_STATIC": "OFF",
+        "CAPY_ASAN": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -50,6 +73,14 @@
     {
       "name": "release-arm64",
       "configurePreset": "release-arm64"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "asan-arm64",
+      "configurePreset": "asan-arm64"
     }
   ]
 }
