@@ -56,7 +56,8 @@ static void read_file_async_cb(uv_fs_t *req) {
   }
   JSValue args[] = {err, data};
   JS_Call(ctx, fs_with_ctx->js_cb, JS_UNDEFINED, 2, args);
-
+  JS_FreeValue(ctx, err);
+  JS_FreeValue(ctx, data);
   JS_FreeValue(ctx, fs_with_ctx->js_cb);
   uv_fs_req_cleanup(req);
   free(fs_with_ctx->req);
