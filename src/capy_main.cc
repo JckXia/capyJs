@@ -24,12 +24,6 @@ void dump_exception(JSContext *ctx) {
   JS_FreeValue(ctx, exc);
 }
 
-void on_signal(uv_signal_t *handle, int signum) {
-  uv_signal_stop(handle);
-  uv_close((uv_handle_t *)handle, NULL);
-  uv_stop(uv_default_loop());
-}
-
 void tear_down_runtime_env(RuntimeContext *env, JSContext *ctx) {
   JSRuntime *rt = env->js_env;
   for (JSValue v : env->http_ctx->registerd_cb) {
@@ -67,13 +61,6 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // #################### Init Libuv signal trapper for handling graceful
-  // shutdowns #############//
-  uv_signal_t sig;
-  uv_signal_init(uv_default_loop(), &sig);
-  uv_signal_start(&sig, on_signal, SIGINT);
-  // ############################################# //
-
   // ##### Init JS runtime ######## //
   JSRuntime *rt = JS_NewRuntime();
   JSContext *ctx = JS_NewContext(rt);
@@ -84,6 +71,7 @@ int main(int argc, char **argv) {
   IdGenerator id_gen;
   RuntimeContext env;
   FSContext fs_ctx;
+  SignalContext signal_ctx;
 
   env.loop = uv_default_loop();
   env.loop->data = &env;
@@ -93,6 +81,7 @@ int main(int argc, char **argv) {
   env.timer_ctx = &timer_ctx;
   env.id_generator = &id_gen;
   env.fs_ctx = &fs_ctx;
+  env.signal_ctx = &signal_ctx;
   env.allocator = new Allocator(); // Can easily swap with malloc/free or
                                    // straight up jemalloc
   env.sock_alloc = new Allocator(); // Allocator dedicated for websocket for debugging

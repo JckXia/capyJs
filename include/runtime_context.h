@@ -5,6 +5,7 @@
 #include "server.h"
 #include "timer_util.h"
 #include "fs_context.h"
+#include "signal_context.h"
 #include "allocator.h"
 class Server;
 
@@ -20,4 +21,5 @@ struct RuntimeContext {
   Allocator * allocator;
   Allocator* sock_alloc;
   FSContext * fs_ctx;
+  SignalContext *signal_ctx;
 };
