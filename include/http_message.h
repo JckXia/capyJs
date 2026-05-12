@@ -5,8 +5,8 @@
 #include <map> // TODO: All of this needs to be repalced with deterministinc alloc
 
 struct RequestObject {
-  char verb[7];
-  char uri[20];
+  char verb[16];
+  char uri[512];
 };
 
 struct ResponseObject {
@@ -24,5 +24,7 @@ struct ResponseObject {
 
   static void on_write_cb(uv_write_t *req, int status);
   static void on_static_write_cb(uv_write_t *req, int status);
+  static void on_shutdown_cb(uv_shutdown_t*req, int status);
   void send();
+  void abort();
 };

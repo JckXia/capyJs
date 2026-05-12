@@ -34,7 +34,18 @@ struct HttpContext {
     if (it != routes_.end()) {
       it->second(req, res);
     } else {
-      assert(false && "FUNCTION not found");
+      std::cout << "[404] " << req.verb << " " << req.uri << "\n";
+      static const char response[] =
+          "HTTP/1.1 404 Not Found\r\n"
+          "Content-Type: text/plain\r\n"
+          "Content-Length: 9\r\n"
+          "Connection: keep-alive\r\n"
+          "\r\n"
+          "Not Found";
+      ClientState *client_state = (ClientState *)res.cli->data;
+      uv_buf_t buf = uv_buf_init(const_cast<char *>(response), sizeof(response) - 1);
+      uv_write(&client_state->write_handle, res.cli, &buf, 1, nullptr);
+      delete &res;
     }
   }
 

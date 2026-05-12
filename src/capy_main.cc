@@ -109,7 +109,6 @@ int main(int argc, char **argv) {
   if (JS_IsException(result)) {
     dump_exception(ctx);
   }
-
   uv_run(uv_default_loop(), UV_RUN_DEFAULT);
   
   free(code);

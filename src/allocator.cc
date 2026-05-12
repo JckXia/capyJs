@@ -1,9 +1,14 @@
 #include "allocator.h"
 #include "types.h"
+#include <cstddef>
 #include <iostream>
 
-struct BlockHeader {
-  uint8_t bin_index; // 1 byte is plenty for 10 bins
+// alignas ensures header + 1 returns a pointer satisfying the strictest
+// alignment required by any type we store (8 or 16 bytes depending on ABI).
+// Without this, every returned pointer was 2 bytes past an 8-byte boundary,
+// causing misaligned access faults on ARM.
+struct alignas(alignof(std::max_align_t)) BlockHeader {
+  uint8_t bin_index;
   uint8_t type_hint;
 };
 
@@ -89,7 +94,7 @@ void *Allocator::alloc_helper(size_t bin_idx) {
   return nullptr;
 }
 void *Allocator::alloc(size_t size) {
-  uint8_t bin_idx = get_bin_index(size);
+  uint8_t bin_idx = get_bin_index(size + sizeof(BlockHeader));
   void *block = alloc_helper(bin_idx);
   if (block == nullptr) {
     return nullptr;
@@ -102,7 +107,7 @@ void *Allocator::alloc(size_t size) {
 }
 
 void *Allocator::alloc(size_t size, uint8_t type) {
-  uint8_t bin_idx = get_bin_index(size);
+  uint8_t bin_idx = get_bin_index(size + sizeof(BlockHeader));
   void *block = alloc_helper(bin_idx);
   if (block == nullptr) {
     return nullptr;
