@@ -12,6 +12,7 @@
 static void server_finalizer(JSRuntime *rt, JSValue val) {
   Server *server = (Server *)JS_GetOpaque(val, server_class_id);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
+  env->signal_ctx->deregister_daemon(SIGINT);
   env->allocator->release(server);
 }
 

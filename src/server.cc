@@ -1,5 +1,6 @@
 #include "server.h"
 #include "client_op.h"
+#include <csignal>
 #include "client_state.h"
 #include "picohttpparser.h"
 #include "quickjs.h"
@@ -397,6 +398,8 @@ Server::Server(int portNum, RuntimeContext *env)
     : portNum(portNum), _env(env) {}
 
 int Server::run() {
+  _env->signal_ctx->register_daemon(_env->loop, SIGINT);
+
   int rc;
   struct sockaddr_in server_address;
   if ((rc = uv_ip4_addr("0.0.0.0", portNum, &_server_addr)) <

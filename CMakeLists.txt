@@ -70,6 +70,7 @@ add_executable(capy
  src/builtins/server_js.cc
  src/builtins/timer.cc
  src/builtins/ws_js.cc
+ src/signal_context.cc
 )
  
 add_library(server src/server.cc)
