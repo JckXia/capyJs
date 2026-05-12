@@ -34,11 +34,13 @@ void tear_down_runtime_env(RuntimeContext *env, JSContext *ctx) {
   for (JSValue v : env->timer_ctx->registered_cb) {
     JS_FreeValue(ctx, v);
   }
+
+  uv_loop_close(env->loop);
+  uv_library_shutdown();
+  
   JS_RunGC(rt);
   JS_FreeContext(ctx);
   JS_FreeRuntime(rt);
-  uv_loop_close(env->loop);
-  uv_library_shutdown();
   env->allocator->verify_no_leaks();
   env->sock_alloc->verify_no_leaks();
   
