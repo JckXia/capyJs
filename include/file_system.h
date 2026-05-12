@@ -1,17 +1,31 @@
 #pragma once
 #include "uv.h"
- 
+#include "quickjs.h"
+#include <string>
+#include <map>
 
- 
-// TODO: Atm it will only work with a single file
-// An idea is:
-//  -> map file path to an fd
-//  -> map fd to an struct of {Enum::Phase,uv_fs_t, js_cb, buffer}
-struct FileSystem {
+struct FileSystem;
+
+struct FileEntry {
     int fd = -1;
-    uv_fs_t* open_req;
-    uv_fs_t* read_req;
-    const char * filepath;
-    JSValue open_cb;
+    char *buf = nullptr;
+    size_t buf_len = 0;
+    JSValue pending_cb;
     JSValue read_cb;
+    JSContext *ctx = nullptr;
+    FileSystem *owner = nullptr;
+
+    FileEntry() { pending_cb = JS_UNDEFINED; }
+};
+
+struct FileSystem {
+    std::map<std::string, FileEntry *> byPath;
+    std::map<int, FileEntry *> byFd;
+
+    ~FileSystem() {
+        for (auto &[path, entry] : byPath) {
+            delete[] entry->buf;
+            delete entry;
+        }
+    }
 };
