@@ -3,6 +3,8 @@
 #include "uv.h"
 #include <cstring>
 #include "ws.h"
+
+class Server;
 struct ReadBuffer {
   ReadBuffer() : next(nullptr), len(0) {}
   char read_buffer[256];
@@ -33,6 +35,7 @@ struct ClientState {
 
   char *pending_write_buffer = nullptr; // TODO: Need to rethink this bit
   WebSocket *activeWs = nullptr;
+  Server *server = nullptr;
   size_t recv_count = 0;
   int recv_len = 0;
 

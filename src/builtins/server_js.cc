@@ -13,7 +13,7 @@ static void server_finalizer(JSRuntime *rt, JSValue val) {
   Server *server = (Server *)JS_GetOpaque(val, server_class_id);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
   env->signal_ctx->deregister_daemon(SIGINT);
-  env->allocator->release(server);
+  delete server;
 }
 
 MappedFile mmap_static_file(const char *path) {
@@ -97,7 +97,7 @@ static JSValue register_ws_url(JSContext *ctx, JSValueConst this_val, int argc,
     JSValue args[] = {js_ws};
     ws.sock_js = js_ws;
     JS_Call(ctx, callback, JS_UNDEFINED, 1, args);
-    // JS_FreeValue(ctx, js_ws);
+ 
   });
   JS_FreeCString(ctx, uri);
   env->http_ctx->registerd_cb.push_back(callback);
@@ -160,7 +160,7 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
   JSRuntime *rt = JS_GetRuntime(ctx);
   RuntimeContext *env = (RuntimeContext *)JS_GetRuntimeOpaque(rt);
 
-  Server *server = (Server *)env->allocator->alloc(sizeof(Server));
+  Server * server = new Server();
   // TODO: Error handling, possibly throw an exception
   server->setEnv(env);
 

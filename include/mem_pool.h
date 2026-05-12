@@ -12,7 +12,7 @@
 //  ThreadSafeMemoryPool
 template <typename T> class MemPool {
 public:
-  explicit MemPool(size_t capacity);
+  explicit MemPool(size_t capacity, const char *name = "MemPool");
   ~MemPool();
 
   T *acquire();
@@ -46,10 +46,12 @@ private:
 
   size_t capacity_;
   size_t in_use_count_;
+  const char *name_;
 };
 
 template <typename T>
-MemPool<T>::MemPool(size_t capacity) : capacity_(capacity), in_use_count_(0) {
+MemPool<T>::MemPool(size_t capacity, const char *name)
+    : capacity_(capacity), in_use_count_(0), name_(name) {
   slots_ = new Slot[capacity]();
   for (int i = 0; i < capacity; i++) {
     if (i < capacity - 1) {
@@ -62,19 +64,12 @@ MemPool<T>::MemPool(size_t capacity) : capacity_(capacity), in_use_count_(0) {
 
 template <typename T> void MemPool<T>::verify_no_leaks() const {
 
-  int blocks_leaked = 0;
-  // std::map<const char*, int> leaked_blocks;
-  for (int i = 0; i < capacity_; i++) {
-    if (slots_[i].in_use == true) {
-      std::cout << "[ERROR] slot " << i << "  " << slots_[i]
-                << " Has not been free'd! " << std::endl;
-
-      blocks_leaked += 1;
-    }
+  if (in_use_count_ == 0) {
+    std::cout << "[OK] " << name_ << "\n";
+    return;
   }
-  if (blocks_leaked == 0) {
-    std::cout << "[SUCCESS] No leak found. All memory freed \n";
-  }
+  std::cout << "[LEAK] " << name_ << ": " << in_use_count_ << " / "
+            << capacity_ << " slots still in use\n";
 }
 
 template <typename T> T *MemPool<T>::acquire() {

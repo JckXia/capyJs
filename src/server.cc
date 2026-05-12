@@ -11,7 +11,9 @@
 #include <string>
 #include <vector>
 
-Server::Server() {}
+Server::Server() {
+  std::cout<<"init server!\n";
+}
 
 WSUpgradeInfo parseWSUpgrade(phr_header *headers, size_t num_headers) {
   WSUpgradeInfo info = {false, "", "", ""};
@@ -63,8 +65,7 @@ void Server::on_client_closed_emergency(uv_handle_t *handle) {
 
 void Server::on_idle_timer_closed_cb(uv_handle_t *handle) {
   ClientState *client = (ClientState *)handle->data;
-  RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
-  ctx->allocator->release(client);
+  client->server->pool.release_client(client);
 }
 
 void Server::on_idle_timeout_cb(uv_timer_t *handle) {
@@ -82,7 +83,7 @@ void Server::on_client_closed_cb(uv_handle_t *handle) {
   client->closing = true;
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
 
-  client_ops::clear_buffer(client, ctx);
+  client_ops::clear_buffer(client);
 
   if (client->activeWs) {
     client->activeWs->onClose();
@@ -210,7 +211,7 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
   }
 
   if (client_state->write_in_flight || client_state->closing == true) {
-    client_ops::clear_buffer(client_state, ctx);
+    client_ops::clear_buffer(client_state);
     uv_read_stop(client);
     return;
   }
@@ -229,7 +230,7 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
 
   std::cout << req.verb << " " << req.uri << "\n";
 
-  client_ops::clear_buffer(client_state, ctx);
+  client_ops::clear_buffer(client_state);
 
   WSUpgradeInfo info = parseWSUpgrade(headers, num_headers);
   if (info.isUpgrade) {
@@ -267,7 +268,7 @@ void Server::process_web_socket_request(uv_stream_t *client, ssize_t nread,
     return;
   }
 
-  client_ops::clear_buffer(client_state, ctx);
+  client_ops::clear_buffer(client_state);
 }
 // Web Socket is initialized...client side
 void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
@@ -291,7 +292,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     }
   } else if (nread == UV_EOF) {
 
-    ctx->allocator->release((ReadBuffer *)buf->base);
+    client_state->server->pool.release_read_buffer((ReadBuffer *)buf->base);
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
@@ -303,7 +304,7 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
     }
   } else {
 
-    ctx->allocator->release((ReadBuffer *)buf->base);
+    client_state->server->pool.release_read_buffer((ReadBuffer *)buf->base);
     if (!uv_is_closing((uv_handle_t *)client)) {
       uv_close((uv_handle_t *)client, on_client_closed_cb);
     }
@@ -313,8 +314,8 @@ void Server::on_read_cb(uv_stream_t *client, ssize_t nread,
 void Server::on_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size,
                                 uv_buf_t *buf) {
 
-  RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
-  ReadBuffer *buffer = (ReadBuffer *)ctx->allocator->alloc(sizeof(ReadBuffer));
+  ClientState *client_state = (ClientState *)handle->data;
+  ReadBuffer *buffer = client_state->server->pool.acquire_read_buffer();
   if (buffer != nullptr) {
     buf->base = buffer->read_buffer;
     buf->len = 256;
@@ -342,9 +343,9 @@ void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
   }
   int rc;
 
-  RuntimeContext *env = (RuntimeContext *)server_stream->loop->data;
-  ClientState *client =
-      (ClientState *)env->allocator->alloc(sizeof(ClientState));
+  Server *server = (Server *)server_stream->data;
+  RuntimeContext *env = server->_env;
+  ClientState *client = server->pool.acquire_client();
 
   if (client == nullptr) {
     std::cerr << "Connection pool is exhausted!\n";
@@ -363,6 +364,7 @@ void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
   }
 
   init_client_state(client);
+  client->server = server;
   init_client_socket(client);
   uv_timer_init(env->loop, &client->idle_timer);
   client->idle_timer.data = client;
@@ -392,16 +394,17 @@ void Server::registerWsFuncHandler(const char *uri, WSHandler handler) {
 }
 
 Server::Server(int portNum, const char *portAddr)
-    : portNum(portNum), portAddr(portAddr) {}
+    : portNum(portNum), portAddr(portAddr) {
+    }
 
 Server::Server(int portNum, RuntimeContext *env)
-    : portNum(portNum), _env(env) {}
+    : portNum(portNum), _env(env) {
+    }
 
 int Server::run() {
   _env->signal_ctx->register_daemon(_env->loop, SIGINT);
 
   int rc;
-  struct sockaddr_in server_address;
   if ((rc = uv_ip4_addr("0.0.0.0", portNum, &_server_addr)) <
       0) { // No kernel interaction, simply fills a sockaddr_in struct in proc
            // memory
@@ -410,7 +413,7 @@ int Server::run() {
   }
 
   uv_loop_t *loop = this->_env->loop;
-  uv_tcp_t server_stream;
+  _server_stream.data = this;
 
   if ((rc = uv_tcp_init(loop, &_server_stream)) <
       0) { // This is where the fd is created. Kernel has no idea what IP/Port

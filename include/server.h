@@ -2,6 +2,7 @@
 #pragma once
 
 #include "runtime_context.h"
+#include "server_pool.h"
 #include "uv.h"
 
 class RuntimeContext;
@@ -32,8 +33,10 @@ public:
 
   int run();
 
-  void setEnv(RuntimeContext *env) { this->_env = env; }
-
+  void setEnv(RuntimeContext *env) {
+     this->_env = env;
+       
+  }
   void setPortNum(int portNum) { this->portNum = portNum; }
 
   // Libuv life cycles exposed to allow async context propagation/CB
@@ -61,4 +64,7 @@ private:
   uv_tcp_t _server_stream;
   int portNum;
   const char *portAddr;
+
+public:
+  ServerPool pool;
 };
