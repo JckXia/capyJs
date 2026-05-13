@@ -60,7 +60,7 @@ void Server::init_client_socket(ClientState *client_state) {
 
 void Server::on_client_closed_emergency(uv_handle_t *handle) {
   RuntimeContext *ctx = (RuntimeContext *)handle->loop->data;
-  ctx->allocator->release((uv_tcp_t *)handle);
+  free(handle);
 }
 
 void Server::on_idle_timer_closed_cb(uv_handle_t *handle) {
@@ -350,7 +350,8 @@ void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
   if (client == nullptr) {
     std::cerr << "Connection pool is exhausted!\n";
 
-    uv_tcp_t *temp_socket = (uv_tcp_t *)env->allocator->alloc(sizeof(uv_tcp_t));
+    uv_tcp_t *temp_socket = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
+
     int rc = uv_tcp_init(uv_default_loop(),
                          temp_socket); // Needs to let libuv know about socket
     std::cout << rc << std::endl;
