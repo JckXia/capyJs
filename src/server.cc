@@ -92,7 +92,7 @@ void Server::on_client_closed_cb(uv_handle_t *handle) {
   if (client->activeWs) {
     client->activeWs->onClose();
     JS_FreeValue(ctx->js_ctx, client->activeWs->sock_js);
-    ctx->sock_alloc->release(client->activeWs);
+    free(client->activeWs);
     client->activeWs = nullptr;
   }
 
@@ -109,9 +109,8 @@ void Server::on_write_cb(uv_write_t *req, int status) {
   }
 
   ClientState *client_state = (ClientState *)req->data;
-  RuntimeContext *ctx = (RuntimeContext *)req->handle->loop->data;
   client_state->write_in_flight = false; // dynamic writes
-  ctx->allocator->release(client_state->pending_write_buffer);
+  free(client_state->pending_write_buffer);
   uv_read_start((uv_stream_t *)&client_state->socket, on_alloc_buffer_cb,
                 on_read_cb);
 }
@@ -240,8 +239,7 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
   if (info.isUpgrade) {
     // Switch protocol
     std::string accept_key = compute_ws_accept_key(info.key);
-    WebSocket *ws = (WebSocket *)ctx->sock_alloc->alloc(sizeof(WebSocket),
-                                                        AllocType::TYPE_WS);
+    WebSocket *ws = (WebSocket *)malloc(sizeof(WebSocket));
     ws->cli = client;
     ctx->http_ctx->invoke_ws_function(*ws, req.uri); // The setup function
     ws->complete_protocol_upgrade_handshake(accept_key);
@@ -362,7 +360,7 @@ void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
     if (uv_accept(server_stream, (uv_stream_t *)temp_socket) == 0) {
       uv_close((uv_handle_t *)temp_socket, on_client_closed_emergency);
     } else {
-      env->allocator->release(temp_socket);
+      free(temp_socket);
     }
 
     return;

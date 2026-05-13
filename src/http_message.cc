@@ -1,6 +1,7 @@
 #include "http_message.h"
 #include "client_state.h"
-#include "runtime_context.h"
+#include "server.h"
+#include <cstdlib>
 
 int ResponseObject::build_headers(char *header_buf, size_t header_len,
                                   ResponseObject *res) {
@@ -41,8 +42,7 @@ int ResponseObject::build_headers(char *header_buf, size_t header_len,
 
 void ResponseObject::send() {
   ClientState *client_state = (ClientState *)cli->data;
-  RuntimeContext *ctx = (RuntimeContext *)cli->loop->data;
- 
+
   if (client_state->closing == true) {
     return;
   }
@@ -62,11 +62,10 @@ void ResponseObject::send() {
     }
     delete (this);
   } else {
-    client_state->pending_write_buffer =
-        (char *)ctx->allocator->alloc(sizeof(char) * response_len);
+    client_state->pending_write_buffer = (char *)malloc(response_len);
 
     memcpy(client_state->pending_write_buffer, response_buffer, response_len);
-    ctx->allocator->release(response_buffer);
+    free(response_buffer);
     uv_buf_t bufs[2] = {
         uv_buf_init(header_buf, header_len),
         uv_buf_init(client_state->pending_write_buffer, response_len)};

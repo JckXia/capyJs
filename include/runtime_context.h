@@ -6,20 +6,14 @@
 #include "timer_util.h"
 #include "fs_context.h"
 #include "signal_context.h"
-#include "allocator.h"
-class Server;
-
 struct RuntimeContext {
- 
+
   IdGenerator *id_generator;
   uv_loop_t *loop;
   JSRuntime * js_env;
   JSContext* js_ctx;
   HttpContext *http_ctx;
   TimerContext *timer_ctx;
-  MemPool<Server> *server_pools;
-  Allocator * allocator;
-  Allocator* sock_alloc;
   FSContext * fs_ctx;
   SignalContext *signal_ctx;
 };

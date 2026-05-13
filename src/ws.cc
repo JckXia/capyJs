@@ -2,7 +2,7 @@
 #include "client_state.h"
 #include "quickjs.h"
 #include "runtime_context.h"
-#include "types.h"
+#include <cstdlib>
 
 struct Frame {
   bool fin;
@@ -159,19 +159,15 @@ void WebSocket::complete_protocol_upgrade_handshake(
                          "\r\n";
 
   uv_buf_t buf = uv_buf_init((char *)response.c_str(), response.size());
-  uv_write_t *req = (uv_write_t *)ctx->sock_alloc->alloc(
-      sizeof(uv_write_t), AllocType::TYPE_UV_WRITE);
+  uv_write_t *req = (uv_write_t *)malloc(sizeof(uv_write_t));
   req->data = client_state;
 
   uv_write(req, (uv_stream_t *)cli, &buf, 1, [](uv_write_t *req, int status) {
     if (status < 0) {
-      // write failed, handle error
       std::cout << "Write to exchange WS key failed! " << uv_strerror(status)
                 << std::endl;
     }
-    ClientState *client_state = (ClientState *)req->data;
-    RuntimeContext *ctx = (RuntimeContext *)req->handle->loop->data;
-    ctx->sock_alloc->release(req);
+    free(req);
   });
   client_state->activeWs = this;
   client_state->conn_protocol = ConnectionProtocol::TYPE_WEB_SOCKET;
