@@ -77,7 +77,7 @@ void ResponseObject::send() {
                         uv_buf_init(response_buffer, response_len)};
 
     int rc;
-    if ((rc = uv_write(write_handle, cli, bufs, 2, on_static_write_cb)) < 0) {
+    if ((rc = uv_write(write_handle, cli, bufs, 2, Server::on_static_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
     }
     delete (this);
@@ -92,7 +92,7 @@ void ResponseObject::send() {
         uv_buf_init(client_state->pending_write_buffer, response_len)};
 
     int rc;
-    if ((rc = uv_write(write_handle, cli, bufs, 2, on_write_cb)) < 0) {
+    if ((rc = uv_write(write_handle, cli, bufs, 2, Server::on_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
       delete (this);
       return;

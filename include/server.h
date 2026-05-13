@@ -24,6 +24,7 @@ using namespace std; // get rid of this when we add an actual logger to the
 class Server {
 public:
   explicit Server();
+  ~Server();
   explicit Server(int portNum, RuntimeContext *env);
   explicit Server(int portNum, const char *portAddr); // More options later
   void registerFuncHandler(const char *method, const char *uri,

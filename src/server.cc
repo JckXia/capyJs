@@ -15,6 +15,10 @@ Server::Server() {
   std::cout<<"init server!\n";
 }
 
+Server::~Server() {
+  _env->signal_ctx->deregister_daemon(SIGINT);
+}
+
 WSUpgradeInfo parseWSUpgrade(phr_header *headers, size_t num_headers) {
   WSUpgradeInfo info = {false, "", "", ""};
 
