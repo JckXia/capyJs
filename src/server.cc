@@ -16,6 +16,7 @@ Server::Server() {
 }
 
 Server::~Server() {
+  pool.verify_no_leaks();
   _env->signal_ctx->deregister_daemon(SIGINT);
 }
 
