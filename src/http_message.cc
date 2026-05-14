@@ -1,6 +1,7 @@
 #include "http_message.h"
 #include "client_state.h"
-#include "runtime_context.h"
+#include "server.h"
+#include <cstdlib>
 
 int ResponseObject::build_headers(char *header_buf, size_t header_len,
                                   ResponseObject *res) {
@@ -38,31 +39,10 @@ int ResponseObject::build_headers(char *header_buf, size_t header_len,
   offset += snprintf(header_buf + offset, header_len - offset, "\r\n");
   return offset;
 }
-void ResponseObject::on_static_write_cb(uv_write_t *req, int status) {
-  ClientState *client_state = (ClientState *)req->data;
-  client_state->write_in_flight = false;
-  uv_read_start((uv_stream_t *)&client_state->socket,
-                Server::on_alloc_buffer_cb, Server::on_read_cb);
-}
-void ResponseObject::on_write_cb(uv_write_t *req, int status) {
-  if (status) {
-    std::cout << "ERROR! " << uv_strerror(status) << std::endl;
-  } else {
-    // std::cout<<"Write completed \n";
-  }
-
-  ClientState *client_state = (ClientState *)req->data;
-  RuntimeContext *ctx = (RuntimeContext *)req->handle->loop->data;
-  client_state->write_in_flight = false;
-  ctx->allocator->release(client_state->pending_write_buffer);
-  uv_read_start((uv_stream_t *)&client_state->socket,
-                Server::on_alloc_buffer_cb, Server::on_read_cb);
-}
 
 void ResponseObject::send() {
   ClientState *client_state = (ClientState *)cli->data;
-  RuntimeContext *ctx = (RuntimeContext *)cli->loop->data;
- 
+
   if (client_state->closing == true) {
     return;
   }
@@ -77,22 +57,21 @@ void ResponseObject::send() {
                         uv_buf_init(response_buffer, response_len)};
 
     int rc;
-    if ((rc = uv_write(write_handle, cli, bufs, 2, on_static_write_cb)) < 0) {
+    if ((rc = uv_write(write_handle, cli, bufs, 2, Server::on_static_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
     }
     delete (this);
   } else {
-    client_state->pending_write_buffer =
-        (char *)ctx->allocator->alloc(sizeof(char) * response_len);
+    client_state->pending_write_buffer = (char *)malloc(response_len);
 
     memcpy(client_state->pending_write_buffer, response_buffer, response_len);
-    ctx->allocator->release(response_buffer);
+    free(response_buffer);
     uv_buf_t bufs[2] = {
         uv_buf_init(header_buf, header_len),
         uv_buf_init(client_state->pending_write_buffer, response_len)};
 
     int rc;
-    if ((rc = uv_write(write_handle, cli, bufs, 2, on_write_cb)) < 0) {
+    if ((rc = uv_write(write_handle, cli, bufs, 2, Server::on_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
       delete (this);
       return;

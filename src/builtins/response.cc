@@ -1,7 +1,7 @@
 #include "builtins/response.h"
 #include "http_message.h"
+#include <cstdlib>
 #include <string.h>
-#include "runtime_context.h" // Do we really need this to get allocator?
 
 static JSClassDef response_class_def = {.class_name = "Response"};
 JSClassID response_class_id;
@@ -11,24 +11,13 @@ static JSValue response_end(JSContext *ctx, JSValueConst this_val, int argc,
       (ResponseObject *)JS_GetOpaque2(ctx, this_val, response_class_id);
   if (!res)
     return JS_EXCEPTION;
-  JSRuntime *rt = JS_GetRuntime(ctx);
-  RuntimeContext *env =
-      (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx)); // TODO: Make this into a helper function
   const char *body = JS_ToCString(ctx, argv[0]);
   size_t len = strlen(body);
-  // std::cout<<"Len " << len << "   " << body<< std::endl;
-                              
- 
 
-  res->response_buffer = (char *)env->allocator->alloc(sizeof(char) * len + 1);
+  res->response_buffer = (char *)malloc(len + 1);
   if (res->response_buffer == nullptr) {
   //  std::cout << "[ERROR] response buffer pool exhausted, dropping connection\n";
     JS_FreeCString(ctx, body);
-  // //  res->cli->write_in_flight = false;
-  //   ClientState *client_state = (ClientState *)res->cli->data;
-  //   client_state->write_in_flight = false;
-  //   if (!uv_is_closing((uv_handle_t *)res->cli))
-  //     uv_close((uv_handle_t *)res->cli, Server::on_client_closed_cb);
     res->abort();
     
     return JS_UNDEFINED;

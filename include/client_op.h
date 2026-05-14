@@ -1,7 +1,6 @@
 #pragma once
 #include "client_state.h"
- 
-#include "runtime_context.h"
+#include "server.h"
 namespace client_ops {
 
 inline void recv_new_buffer(ClientState *client, ReadBuffer *buff) {
@@ -17,14 +16,14 @@ inline void recv_new_buffer(ClientState *client, ReadBuffer *buff) {
   }
 }
 
-inline void clear_buffer(ClientState *client, RuntimeContext *ctx) {
+inline void clear_buffer(ClientState *client) {
   if (client == nullptr) {
     return;
   }
   while (client->recv_head != nullptr) {
     ReadBuffer *currHead = client->recv_head;
     ReadBuffer *next = client->recv_head->next;
-    ctx->allocator->release(currHead);
+    client->server->pool.release_read_buffer(currHead);
     client->recv_head = next;
     client->recv_count -= 1;
   }

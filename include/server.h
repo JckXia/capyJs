@@ -2,6 +2,7 @@
 #pragma once
 
 #include "runtime_context.h"
+#include "server_pool.h"
 #include "uv.h"
 
 class RuntimeContext;
@@ -23,6 +24,7 @@ using namespace std; // get rid of this when we add an actual logger to the
 class Server {
 public:
   explicit Server();
+  ~Server();
   explicit Server(int portNum, RuntimeContext *env);
   explicit Server(int portNum, const char *portAddr); // More options later
   void registerFuncHandler(const char *method, const char *uri,
@@ -32,8 +34,10 @@ public:
 
   int run();
 
-  void setEnv(RuntimeContext *env) { this->_env = env; }
-
+  void setEnv(RuntimeContext *env) {
+     this->_env = env;
+       
+  }
   void setPortNum(int portNum) { this->portNum = portNum; }
 
   // Libuv life cycles exposed to allow async context propagation/CB
@@ -61,4 +65,7 @@ private:
   uv_tcp_t _server_stream;
   int portNum;
   const char *portAddr;
+
+public:
+  ServerPool pool;
 };

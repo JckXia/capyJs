@@ -60,7 +60,6 @@ add_executable(capy
  src/util.cc
  src/timer_util.cc
  src/builtins/fs.cc
- src/allocator.cc
  src/http_message.cc
  src/ws.cc
  src/builtins/builtins.cc
