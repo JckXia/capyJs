@@ -70,6 +70,9 @@ add_executable(capy
  src/builtins/timer.cc
  src/builtins/ws_js.cc
  src/signal_context.cc
+ src/inference_engine.cc
+ src/inference_worker.cc
+ src/builtins/inference_js.cc
 )
  
 add_library(server src/server.cc)
