@@ -2,15 +2,12 @@
 #include "inference_worker.h"
 #include "quickjs.h"
 #include "uv.h"
+#include "llama.h"
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
-
-struct ModelConfig {
-    char model_class[32];
-    char path[256];
-};
 
 class InferenceEngine {
 public:
@@ -19,28 +16,33 @@ public:
     InferenceEngine(const InferenceEngine &) = delete;
     InferenceEngine &operator=(const InferenceEngine &) = delete;
 
-    // Called by the JS finalizer: stops all workers (joins threads), then
-    // the caller must uv_close(async_handle(), ...) to finish teardown.
+    // Called by the JS finalizer: stops all workers then frees model weights.
+    // Caller must uv_close(async_handle(), ...) to finish teardown.
     void shutdown();
 
-    bool add_worker(const char *model_class, const char *path);
+    // Load model weights and register under model_class. Call before spawn_workers.
+    bool add_model(const char *model_class, const char *path);
 
-    // JS-facing methods (called on main thread)
+    // Spin up count workers pinned to cores 1..count. Call after all add_model calls.
+    void spawn_workers(int count);
+
+    // Workers call this (read-only after spawn_workers; no mutex needed).
+    llama_model *get_model(const char *model_class);
+
     JSValue js_list_workers(JSContext *ctx);
-    JSValue js_do_inference(JSContext *ctx, int worker_id,
+    JSValue js_do_inference(JSContext *ctx, JSValue model_class,
                             JSValue packet, JSValue callback);
 
-    // uv_async_t callback — fires on main thread when any worker signals.
-    // Drains all result queues and dispatches stored JS callbacks.
     static void on_token_ready(uv_async_t *handle);
-
     uv_async_t *async_handle() { return &async_; }
 
 private:
+    std::map<std::string, llama_model *>          models_;
     std::vector<std::unique_ptr<InferenceWorker>> workers_;
-    std::map<uint64_t, JSValue> pending_callbacks_;  // job_id → JS callback
+    std::map<uint64_t, JSValue>                   pending_callbacks_;
 
-    uv_async_t  async_;   // async_.data = this; workers call uv_async_send(&async_)
-    JSContext  *js_ctx_;
-    uint64_t    next_job_id_{0};
+    int        next_worker_rr_{0};
+    uv_async_t async_;
+    JSContext *js_ctx_;
+    uint64_t   next_job_id_{0};
 };

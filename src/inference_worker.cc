@@ -1,28 +1,19 @@
 #include "inference_worker.h"
 #include "inference_engine.h"
-#include <cstdlib>
-#include <cstring>
 #include <cstdio>
+#include <cstring>
+#include <pthread.h>
+#include <sched.h>
 #include <unistd.h>
 
-static const char *VOCAB[] = {
-    "the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog",
-    "hello", "world", "how", "are", "you", "I", "am", "fine", "a",
-    "an", "is", "was", "with", "and", "that", "this", "on", "in",
-};
-static constexpr int VOCAB_SIZE = sizeof(VOCAB) / sizeof(VOCAB[0]);
-static constexpr int TOKEN_GEN_MAX = 20;
-static constexpr int TOKEN_DELAY_US = 10000; // 10 ms simulated latency
-
-InferenceWorker::InferenceWorker(int worker_id, const char *model_class,
-                                 const char *model_path, InferenceEngine *parent)
-    : worker_id_(worker_id), parent_(parent) {
-    snprintf(model_class_, sizeof(model_class_), "%s", model_class);
-    snprintf(model_path_,  sizeof(model_path_),  "%s", model_path);
-}
+InferenceWorker::InferenceWorker(int worker_id, int core_start, int core_count,
+                                 InferenceEngine *parent)
+    : worker_id_(worker_id), core_start_(core_start), core_count_(core_count),
+      parent_(parent) {}
 
 InferenceWorker::~InferenceWorker() {
-    for (auto &[id, rb] : context_windows_) delete rb;
+    for (auto &[cls, s] : samplers_) llama_sampler_free(s);
+    for (auto &[cls, c] : ctxs_)    llama_free(c);
 }
 
 bool InferenceWorker::enqueue_job(const JobItem &job) {
@@ -40,9 +31,7 @@ void InferenceWorker::stop() {
 }
 
 WorkerStats InferenceWorker::stats() const {
-    // Approximate depth: difference between write and read cursors.
-    // We expose this as a rough backpressure signal for the JS layer.
-    return {worker_id_, model_class_, job_queue_.empty() ? 0 : 1};
+    return {worker_id_, core_start_, core_count_, job_queue_.empty() ? 0 : 1};
 }
 
 void InferenceWorker::thread_entry(void *arg) {
@@ -50,48 +39,148 @@ void InferenceWorker::thread_entry(void *arg) {
 }
 
 void InferenceWorker::run() {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    for (int i = 0; i < core_count_; i++)
+        CPU_SET(core_start_ + i, &cpuset);
+    if (pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset) != 0)
+        fprintf(stderr, "[worker %d] failed to pin to cores %d-%d\n",
+                worker_id_, core_start_, core_start_ + core_count_ - 1);
+    else
+        fprintf(stderr, "[worker %d] pinned to cores %d-%d\n",
+                worker_id_, core_start_, core_start_ + core_count_ - 1);
+
     while (running_.load(std::memory_order_acquire)) {
         JobItem job;
         if (job_queue_.pop(job)) {
             run_inference(job);
         } else {
-            usleep(1000); // 1 ms idle poll
+            usleep(1000);
         }
     }
 }
 
-void InferenceWorker::run_inference(const JobItem &job) {
-    // Maintain context window for this session
-    auto it = context_windows_.find(job.session_id);
-    if (it == context_windows_.end()) {
-        context_windows_[job.session_id] = new RingBuffer();
-        it = context_windows_.find(job.session_id);
+llama_context *InferenceWorker::get_or_create_ctx(const char *model_class,
+                                                   llama_sampler *&sampler_out) {
+    auto it = ctxs_.find(model_class);
+    if (it != ctxs_.end()) {
+        sampler_out = samplers_[model_class];
+        return it->second;
     }
-    it->second->push_str(job.prompt);
 
-    int n_tokens = 5 + (rand() % (TOKEN_GEN_MAX - 4));
+    llama_model *model = parent_->get_model(model_class);
+    if (!model) {
+        sampler_out = nullptr;
+        return nullptr;
+    }
 
-    for (int i = 0; i < n_tokens; i++) {
-        if (!running_.load(std::memory_order_acquire)) break;
+    llama_context_params cp = llama_context_default_params();
+    cp.n_ctx     = 2048;
+    cp.n_batch   = 512;
+    cp.n_threads = core_count_;
 
-        usleep(TOKEN_DELAY_US);
+    llama_context *ctx = llama_init_from_model(model, cp);
+    if (!ctx) {
+        fprintf(stderr, "[worker %d] failed to create context for '%s'\n",
+                worker_id_, model_class);
+        sampler_out = nullptr;
+        return nullptr;
+    }
+
+    llama_sampler *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
+    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95f, 1));
+    llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.8f));
+    llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+
+    ctxs_[model_class]    = ctx;
+    samplers_[model_class] = sampler;
+    sampler_out = sampler;
+
+    fprintf(stderr, "[worker %d] created context for '%s'\n", worker_id_, model_class);
+    return ctx;
+}
+
+void InferenceWorker::send_error(uint64_t job_id, const char *msg) {
+    TokenResult r{};
+    r.job_id  = job_id;
+    r.is_done = true;
+    r.error   = 1;
+    snprintf(r.token, sizeof(r.token), "%s", msg);
+    while (!result_queue.push(r) && running_.load()) usleep(500);
+    uv_async_send(parent_->async_handle());
+}
+
+void InferenceWorker::run_inference(const JobItem &job) {
+    llama_sampler *sampler = nullptr;
+    llama_context *llm_ctx = get_or_create_ctx(job.model_class, sampler);
+    if (!llm_ctx || !sampler) {
+        send_error(job.job_id, "model not available");
+        return;
+    }
+
+    llama_model *model = parent_->get_model(job.model_class);
+    const llama_vocab *vocab = llama_model_get_vocab(model);
+
+    int n_ctx_max = (int)llama_n_ctx(llm_ctx);
+    std::vector<llama_token> tokens(n_ctx_max);
+
+    int n_tokens = llama_tokenize(vocab, job.prompt, strlen(job.prompt),
+                                  tokens.data(), n_ctx_max,
+                                  /*add_special=*/true, /*parse_special=*/false);
+    if (n_tokens < 0) {
+        send_error(job.job_id, "tokenize failed");
+        return;
+    }
+    tokens.resize(n_tokens);
+
+    llama_memory_clear(llama_get_memory(llm_ctx), /*data=*/true);
+    llama_sampler_reset(sampler);
+
+    llama_batch batch = llama_batch_get_one(tokens.data(), n_tokens);
+    if (llama_decode(llm_ctx, batch) != 0) {
+        send_error(job.job_id, "prompt eval failed");
+        return;
+    }
+
+    bool sent_done = false;
+    for (int i = 0; i < TOKEN_GEN_MAX && running_.load(); i++) {
+        llama_token token_id = llama_sampler_sample(sampler, llm_ctx, -1);
+        llama_sampler_accept(sampler, token_id);
+
+        bool is_eog  = llama_vocab_is_eog(vocab, token_id);
+        bool is_last = is_eog || (i == TOKEN_GEN_MAX - 1);
+
+        char piece[256] = {};
+        if (!is_eog) {
+            int n = llama_token_to_piece(vocab, token_id,
+                                         piece, sizeof(piece) - 1,
+                                         /*lstrip=*/0, /*special=*/false);
+            if (n > 0) piece[n] = '\0';
+        }
 
         TokenResult result{};
         result.job_id  = job.job_id;
-        result.is_done = (i == n_tokens - 1);
+        result.is_done = is_last;
         result.error   = 0;
+        snprintf(result.token, sizeof(result.token), "%s", piece);
 
-        const char *word = VOCAB[rand() % VOCAB_SIZE];
-        if (result.is_done) {
-            snprintf(result.token, sizeof(result.token), "%s", word);
-        } else {
-            snprintf(result.token, sizeof(result.token), "%s ", word);
-        }
+        while (!result_queue.push(result) && running_.load()) usleep(500);
+        uv_async_send(parent_->async_handle());
+        sent_done = is_last;
 
-        // Push token then wake the main thread
-        while (!result_queue.push(result)) {
-            usleep(500); // back-pressure: result queue full, yield
-        }
+        if (is_last) break;
+
+        llama_batch next = llama_batch_get_one(&token_id, 1);
+        if (llama_decode(llm_ctx, next) != 0) break;
+    }
+
+    if (!sent_done) {
+        TokenResult done{};
+        done.job_id  = job.job_id;
+        done.is_done = true;
+        done.error   = 0;
+        while (!result_queue.push(done) && running_.load()) usleep(500);
         uv_async_send(parent_->async_handle());
     }
 }

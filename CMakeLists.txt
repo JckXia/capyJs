@@ -7,6 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(CAPY_STATIC "Statically link the capy executable" OFF)
 option(CAPY_ASAN   "Build with AddressSanitizer"          OFF)
 
+# All vendored/fetched deps build as static libs regardless of preset.
+# CAPY_STATIC separately controls whether the final binary is fully statically linked.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
 # Use -O2 for release instead of CMake's default -O3
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "" FORCE)
 set(CMAKE_C_FLAGS_RELEASE   "-O2 -DNDEBUG" CACHE STRING "" FORCE)
@@ -26,8 +30,7 @@ target_include_directories(picohttp PUBLIC ${PICO_HTTP_DIR})
 #----------------------
 # libuv (vendored)
 #----------------------
-set(LIBUV_BUILD_SHARED OFF CACHE BOOL "" FORCE)  # Static lib only
-set(LIBUV_BUILD_TESTS OFF CACHE BOOL "" FORCE)   # Skip their tests
+set(LIBUV_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(deps/libuv)
 
 #----------------------
@@ -52,6 +55,27 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(quickjs PRIVATE -w)
 endif()
 
+#----------------------
+# llama.cpp
+#----------------------
+include(FetchContent)
+FetchContent_Declare(
+    llama_cpp
+    GIT_REPOSITORY https://github.com/ggerganov/llama.cpp.git
+    GIT_TAG        b5616
+    GIT_SHALLOW    TRUE
+)
+set(LLAMA_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_SERVER   OFF CACHE BOOL "" FORCE)
+if(CMAKE_CROSSCOMPILING)
+    set(GGML_NATIVE  OFF CACHE BOOL "" FORCE)
+    set(GGML_OPENMP  OFF CACHE BOOL "" FORCE)  # no static libgomp for cross toolchain
+else()
+    set(GGML_NATIVE  ON  CACHE BOOL "" FORCE)
+endif()
+FetchContent_MakeAvailable(llama_cpp)
+
 include_directories(include/builtins)
 include_directories(include)
 
@@ -75,10 +99,11 @@ add_executable(capy
  src/builtins/inference_js.cc
 )
  
-add_library(server src/server.cc)
+add_library(server STATIC src/server.cc)
 target_include_directories(server PRIVATE ${QJS_DIR})  # ← add this
 target_link_libraries(server uv_a quickjs picohttp)
-target_link_libraries(capy server uv_a quickjs picohttp)
+target_include_directories(capy PRIVATE ${llama_cpp_SOURCE_DIR}/include)
+target_link_libraries(capy server uv_a quickjs picohttp llama)
 if(CAPY_STATIC)
     target_link_options(capy PRIVATE -static)
 endif()
