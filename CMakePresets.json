@@ -59,6 +59,42 @@
         "CAPY_STATIC": "OFF",
         "CAPY_ASAN": "ON"
       }
+    },
+    {
+      "name": "macos-dev",
+      "displayName": "macOS Development (arm64, Debug)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-macos-dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CAPY_STATIC": "OFF",
+        "CAPY_ASAN": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "macos-dev-x86",
+      "displayName": "macOS Development (x86_64, Debug)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-macos-dev-x86",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_OSX_ARCHITECTURES": "x86_64",
+        "CAPY_STATIC": "OFF",
+        "CAPY_ASAN": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
     }
   ],
   "buildPresets": [
@@ -81,6 +117,14 @@
     {
       "name": "asan-arm64",
       "configurePreset": "asan-arm64"
+    },
+    {
+      "name": "macos-dev",
+      "configurePreset": "macos-dev"
+    },
+    {
+      "name": "macos-dev-x86",
+      "configurePreset": "macos-dev-x86"
     }
   ]
 }
