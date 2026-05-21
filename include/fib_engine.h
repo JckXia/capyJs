@@ -1,6 +1,6 @@
 #pragma once
 #include "i_manager.h"
-#include "fib_worker.h"
+#include "workers/fib_worker.h"
 #include "quickjs.h"
 #include "uv.h"
 #include <cstdint>

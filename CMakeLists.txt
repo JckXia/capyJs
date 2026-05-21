@@ -70,7 +70,7 @@ add_executable(capy
  src/builtins/timer.cc
  src/builtins/ws_js.cc
  src/builtins/fib_js.cc
- src/fib_worker.cc
+ src/workers/fib_worker.cc
  src/fib_engine.cc
  src/signal_context.cc
 )

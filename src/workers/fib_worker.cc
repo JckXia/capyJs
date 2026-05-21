@@ -1,4 +1,4 @@
-#include "fib_worker.h"
+#include "workers/fib_worker.h"
 #include "fib_engine.h"
 
 static uint64_t compute_fib(uint64_t n) {
