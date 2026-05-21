@@ -6,10 +6,11 @@ NativeFibonacciManager::NativeFibonacciManager(JSContext *js_ctx,
     : js_ctx_(js_ctx), loop_(loop) {
     workers_.reserve(worker_size);
     for (int i = 0; i < worker_size; i++)
-        workers_.push_back(new FibonacciWorker(i, this, js_ctx_, loop_));
+        workers_.push_back(
+            new FibonacciWorker(i, this, js_ctx_, loop_));
 }
 
-FibonacciWorker *NativeFibonacciManager::pick_worker() {
+IWorker<FibJob, FibResult> *NativeFibonacciManager::pick_worker() {
     return workers_[next_worker_idx_++ % workers_.size()];
 }
 
@@ -27,7 +28,7 @@ JSValue NativeFibonacciManager::js_dispatch(JSContext *ctx,
     uint64_t job_id = next_job_id_++;
     FibJob   job{job_id, value};
 
-    FibonacciWorker *worker = pick_worker();
+    IWorker<FibJob, FibResult> *worker = pick_worker();
     if (!worker->enqueue(job, JS_DupValue(ctx, callback)))
         return JS_ThrowInternalError(ctx, "worker %d queue full",
                                      worker->worker_id());

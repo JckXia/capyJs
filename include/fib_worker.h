@@ -1,4 +1,5 @@
 #pragma once
+#include "i_worker.h"
 #include "work_queue.h"
 #include "spsc_queue.h"
 #include "quickjs.h"
@@ -24,7 +25,7 @@ struct FibResult {
     JSValue  callback; // carried as opaque bytes, called on main thread only
 };
 
-class FibonacciWorker {
+class FibonacciWorker : public IWorker<FibJob, FibResult> {
 public:
     static constexpr size_t QUEUE_DEPTH        = 64;
     static constexpr size_t RESULT_QUEUE_DEPTH = 64;
@@ -35,17 +36,10 @@ public:
     FibonacciWorker(const FibonacciWorker &) = delete;
     FibonacciWorker &operator=(const FibonacciWorker &) = delete;
 
-    // Returns false if submission queue is full (backpressure).
-    bool enqueue(FibJob job, JSValue callback);
-
-    size_t queue_depth() const { return sub_queue_.empty() ? 0 : 1; }
-
-    // Signals thread to stop, joins it, drains both queues freeing any pending
-    // JS callbacks, then initiates uv_close on the doorbell.
-    // Worker self-deletes in the close callback — do not touch after calling.
-    void stop();
-
-    int worker_id() const { return worker_id_; }
+    bool   enqueue(FibJob job, JSValue callback) override;
+    void   stop() override;
+    size_t queue_depth() const override { return sub_queue_.empty() ? 0 : 1; }
+    int    worker_id() const override { return worker_id_; }
 
     static void on_result_ready(uv_async_t *handle);
 
