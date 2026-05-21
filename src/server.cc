@@ -222,18 +222,17 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
 
   client_state->write_in_flight = true;
 
-  RequestObject req;
+  RequestObject *req = new RequestObject();
   ResponseObject *res = new ResponseObject();
 
-  size_t safe_verb_len = std::min(method_len, sizeof(req.verb) - 1);
-  size_t safe_uri_len  = std::min(path_len,   sizeof(req.uri)  - 1);
-  memcpy(req.verb, method, safe_verb_len);
-  memcpy(req.uri,  path,   safe_uri_len);
-  req.verb[safe_verb_len] = '\0';
-  req.uri[safe_uri_len]   = '\0';
+  size_t safe_verb_len = std::min(method_len, sizeof(req->verb) - 1);
+  size_t safe_uri_len  = std::min(path_len,   sizeof(req->uri)  - 1);
+  memcpy(req->verb, method, safe_verb_len);
+  memcpy(req->uri,  path,   safe_uri_len);
+  req->verb[safe_verb_len] = '\0';
+  req->uri[safe_uri_len]   = '\0';
 
-  std::cout << req.verb << " " << req.uri << "\n";
-
+  std::cout << req->verb << " " << req->uri << "\n";
   client_ops::clear_buffer(client_state);
 
   WSUpgradeInfo info = parseWSUpgrade(headers, num_headers);
@@ -242,7 +241,7 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
     std::string accept_key = compute_ws_accept_key(info.key);
     WebSocket *ws = (WebSocket *)malloc(sizeof(WebSocket));
     ws->cli = client;
-    ctx->http_ctx->invoke_ws_function(*ws, req.uri); // The setup function
+    ctx->http_ctx->invoke_ws_function(*ws, req->uri); // The setup function
     ws->complete_protocol_upgrade_handshake(accept_key);
     delete res;
     return;
@@ -250,7 +249,7 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
 
   res->cli = client;
   ctx->http_ctx->invoke_function(
-      req, *res, req.verb, req.uri); // TODO: Add enums like "INVOKE_SUCCESS",
+      *req, *res, req->verb, req->uri); // TODO: Add enums like "INVOKE_SUCCESS",
                                      // "INVOKE_FAILED", "NOT_FOUND"
 }
 

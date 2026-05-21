@@ -2,7 +2,7 @@
 #include "client_state.h"
 #include "uv.h"
 #include <cstddef>
-#include <map> // TODO: All of this needs to be repalced with deterministinc alloc
+#include <map>
 
 struct RequestObject {
   char verb[16];
@@ -12,7 +12,7 @@ struct RequestObject {
 struct ResponseObject {
   size_t response_len = 0;
   char *response_buffer;
-
+  RequestObject *req;
   std::map<const char *, const char *> headers;
   int header_size = 0;
 
