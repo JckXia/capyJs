@@ -70,7 +70,7 @@
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_OSX_ARCHITECTURES": "arm64",
         "CAPY_STATIC": "OFF",
-        "CAPY_ASAN": "OFF"
+        "CAPY_ASAN": "ON"
       },
       "condition": {
         "type": "equals",
