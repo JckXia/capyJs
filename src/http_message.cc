@@ -52,6 +52,7 @@ void ResponseObject::send() {
   uv_write_t *write_handle = &client_state->write_handle;
   write_handle->data = client_state;
 
+  delete this->req; // Destroys the linked request object
   if (is_static) {
     uv_buf_t bufs[2] = {uv_buf_init(header_buf, header_len),
                         uv_buf_init(response_buffer, response_len)};

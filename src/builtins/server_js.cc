@@ -122,8 +122,9 @@ static JSValue server_listen(JSContext *ctx, JSValueConst this_val, int argc,
   return JS_UNDEFINED;
 }
 
-// server.serveStatic("uri", "./index.html"). This never goes back to JS land
-// TODO: Infer header type from filepath extension (.js vs .css vs .html)
+// server.serveStatic("uri", "./index.html"). 
+// After startup, when a request comes in against this uri it does not route through 
+// the JS layer
 static JSValue server_serve_static(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv) {
   Server *server = (Server *)JS_GetOpaque2(ctx, this_val, server_class_id);
@@ -134,6 +135,8 @@ static JSValue server_serve_static(JSContext *ctx, JSValueConst this_val,
   const char *fp = JS_ToCString(ctx, argv[1]);
   RuntimeContext *env =
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
+
+  env->http_ctx->static_files[fp] = mmap_static_file(fp);
   server->registerFuncHandler(
       "GET", uri, [env, fp](RequestObject &req, ResponseObject &res) {
         MappedFile f = env->http_ctx->static_files[fp];
@@ -163,32 +166,6 @@ static JSValue server_constructor(JSContext *ctx, JSValueConst new_target,
   // TODO: Error handling, possibly throw an exception
   server->setEnv(env);
 
-  JSValue staticFiles = JS_GetPropertyStr(ctx, argv[0], "staticFiles");
-  int is_array = JS_IsArray(ctx, staticFiles);
-
-  if (!is_array) {
-    // TODO error handling
-    return JS_UNDEFINED;
-  }
-
-  uint32_t length;
-  JSValue len_val = JS_GetPropertyStr(ctx, staticFiles, "length");
-  JS_ToUint32(ctx, &length, len_val);
-  JS_FreeValue(ctx, len_val);
-
-  for (uint32_t i = 0; i < length; i++) {
-    JSValue elem = JS_GetPropertyUint32(ctx, staticFiles, i);
-
-    const char *str;
-    size_t len;
-
-    str = JS_ToCStringLen(ctx, &len, elem);
-
-    env->http_ctx->static_files[str] = mmap_static_file(str);
-    JS_FreeValue(ctx, elem);
-  }
-
-  JS_FreeValue(ctx, staticFiles);
   JS_SetOpaque(server_obj, server);
 
   return server_obj;

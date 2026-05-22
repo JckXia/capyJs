@@ -7,80 +7,148 @@
   },
   "configurePresets": [
     {
-      "name": "dev",
-      "displayName": "Development (x86, Debug, dynamic)",
+      "name": ".base-debug",
+      "hidden": true,
       "generator": "Unix Makefiles",
-      "binaryDir": "${sourceDir}/build-dev",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CAPY_STATIC": "OFF",
+        "CAPY_ASAN": "OFF"
+      }
+    },
+    {
+      "name": ".base-release",
+      "hidden": true,
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CAPY_STATIC": "ON",
+        "CAPY_ASAN": "OFF"
+      }
+    },
+    {
+      "name": ".base-asan",
+      "hidden": true,
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CAPY_STATIC": "OFF",
+        "CAPY_ASAN": "ON"
+      }
+    },
+
+    {
+      "name": ".base-cross-arm64",
+      "hidden": true,
+      "toolchainFile": "${sourceDir}/toolchain-aarch64.cmake"
+    },
+
+    {
+      "name": ".base-macos-arm64",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CAPY_STATIC": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": ".base-macos-x86",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_OSX_ARCHITECTURES": "x86_64",
+        "CAPY_STATIC": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+
+    {
+      "name": "x86-dev",
+      "displayName": "x86_64 — Debug",
+      "inherits": ".base-debug",
+      "binaryDir": "${sourceDir}/build/x86-dev"
+    },
+    {
+      "name": "x86-release",
+      "displayName": "x86_64 — Release (static)",
+      "inherits": ".base-release",
+      "binaryDir": "${sourceDir}/build/x86-release"
+    },
+    {
+      "name": "x86-asan",
+      "displayName": "x86_64 — ASan",
+      "inherits": ".base-asan",
+      "binaryDir": "${sourceDir}/build/x86-asan"
+    },
+
+    {
+      "name": "arm64-dev",
+      "displayName": "arm64 — Debug (native arm64 host)",
+      "inherits": [".base-debug", ".base-macos-arm64"],
+      "binaryDir": "${sourceDir}/build/arm64-dev"
+    },
+    {
+      "name": "arm64-release",
+      "displayName": "arm64 — Release (native arm64 host, dynamic)",
+      "inherits": [".base-release", ".base-macos-arm64"],
+      "binaryDir": "${sourceDir}/build/arm64-release",
+      "cacheVariables": {
         "CAPY_STATIC": "OFF"
       }
     },
     {
-      "name": "release-x86",
-      "displayName": "Release (x86, static)",
-      "generator": "Unix Makefiles",
-      "binaryDir": "${sourceDir}/build-release-x86",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CAPY_STATIC": "ON"
-      }
+      "name": "arm64-asan",
+      "displayName": "arm64 — ASan (native arm64 host)",
+      "inherits": [".base-asan", ".base-macos-arm64"],
+      "binaryDir": "${sourceDir}/build/arm64-asan"
+    },
+
+    {
+      "name": "cross-arm64-release",
+      "displayName": "cross-compile arm64 — Release (static, from x86 host)",
+      "inherits": [".base-release", ".base-cross-arm64"],
+      "binaryDir": "${sourceDir}/build/cross-arm64-release"
     },
     {
-      "name": "release-arm64",
-      "displayName": "Release (ARM64 cross-compile, static)",
-      "generator": "Unix Makefiles",
-      "binaryDir": "${sourceDir}/build-release-arm64",
-      "toolchainFile": "${sourceDir}/toolchain-aarch64.cmake",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CAPY_STATIC": "ON"
-      }
+      "name": "cross-arm64-asan",
+      "displayName": "cross-compile arm64 — ASan (from x86 host)",
+      "inherits": [".base-asan", ".base-cross-arm64"],
+      "binaryDir": "${sourceDir}/build/cross-arm64-asan"
+    },
+
+    {
+      "name": "macos-dev",
+      "displayName": "macOS — arm64 Debug + ASan",
+      "inherits": [".base-asan", ".base-macos-arm64"],
+      "binaryDir": "${sourceDir}/build/macos-dev"
     },
     {
-      "name": "asan",
-      "displayName": "ASan (x86, debug)",
-      "generator": "Unix Makefiles",
-      "binaryDir": "${sourceDir}/build-sanitize",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CAPY_STATIC": "OFF",
-        "CAPY_ASAN": "ON"
-      }
-    },
-    {
-      "name": "asan-arm64",
-      "displayName": "ASan (ARM64 cross-compile)",
-      "generator": "Unix Makefiles",
-      "binaryDir": "${sourceDir}/build-sanitize-arm64",
-      "toolchainFile": "${sourceDir}/toolchain-aarch64.cmake",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CAPY_STATIC": "OFF",
-        "CAPY_ASAN": "ON"
-      }
+      "name": "macos-dev-x86",
+      "displayName": "macOS — x86_64 Debug",
+      "inherits": [".base-debug", ".base-macos-x86"],
+      "binaryDir": "${sourceDir}/build/macos-dev-x86"
     }
   ],
   "buildPresets": [
-    {
-      "name": "dev",
-      "configurePreset": "dev"
-    },
-    {
-      "name": "release-x86",
-      "configurePreset": "release-x86"
-    },
-    {
-      "name": "release-arm64",
-      "configurePreset": "release-arm64"
-    },
-    {
-      "name": "asan",
-      "configurePreset": "asan"
-    },
-    {
-      "name": "asan-arm64",
-      "configurePreset": "asan-arm64"
-    }
+    { "name": "x86-dev",            "configurePreset": "x86-dev" },
+    { "name": "x86-release",        "configurePreset": "x86-release" },
+    { "name": "x86-asan",           "configurePreset": "x86-asan" },
+    { "name": "arm64-dev",          "configurePreset": "arm64-dev" },
+    { "name": "arm64-release",      "configurePreset": "arm64-release" },
+    { "name": "arm64-asan",         "configurePreset": "arm64-asan" },
+    { "name": "cross-arm64-release","configurePreset": "cross-arm64-release" },
+    { "name": "cross-arm64-asan",   "configurePreset": "cross-arm64-asan" },
+    { "name": "macos-dev",          "configurePreset": "macos-dev" },
+    { "name": "macos-dev-x86",      "configurePreset": "macos-dev-x86" }
   ]
 }

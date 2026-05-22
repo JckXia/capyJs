@@ -69,6 +69,12 @@ add_executable(capy
  src/builtins/server_js.cc
  src/builtins/timer.cc
  src/builtins/ws_js.cc
+ src/builtins/fib_js.cc
+ src/builtins/js_worker_js.cc
+ src/workers/fib_worker.cc
+ src/workers/js_worker.cc
+ src/fib_engine.cc
+ src/js_engine.cc
  src/signal_context.cc
 )
  

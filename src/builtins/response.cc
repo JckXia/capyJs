@@ -44,7 +44,7 @@ static JSValue response_set_header(JSContext *ctx, JSValueConst this_val,
   const char *header_val = strdup(JS_ToCString(ctx, argv[1]));
   res->headers[header_key] = header_val;
   res->header_size += strlen(header_val);
-  return JS_UNDEFINED;
+  return JS_DupValue(ctx, this_val);
 }
 
 void setup_response_class(JSContext *ctx) {

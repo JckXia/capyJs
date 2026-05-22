@@ -11,4 +11,6 @@ void setup_all_builtins(JSContext *ctx) {
   setup_clear_interval(ctx);
   setup_fs_class(ctx);
   setup_web_socket_class(ctx);
+  setup_fibonacci_class(ctx);
+  setup_js_worker_class(ctx);
 }
