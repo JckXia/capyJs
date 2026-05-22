@@ -7,6 +7,7 @@
 #include "builtins/fs.h"
 #include "builtins/ws_js.h"
 #include "builtins/fib_js.h"
+#include "builtins/js_worker_js.h"
 #include "quickjs.h"
 // Single entry point
 void setup_all_builtins(JSContext *ctx);

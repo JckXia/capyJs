@@ -6,8 +6,6 @@
 #include <cstdint>
 #include <map>
 
-enum class JobStatus { PENDING, DONE, ERROR };
-
 class NativeFibonacciManager : public IManager<FibJob, FibResult> {
 public:
     NativeFibonacciManager(JSContext *js_ctx, uv_loop_t *loop, int worker_size);

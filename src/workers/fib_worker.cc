@@ -1,14 +1,13 @@
 #include "workers/fib_worker.h"
-#include "fib_engine.h"
 
 static uint64_t compute_fib(uint64_t n) {
     if (n <= 1) return n;
     return compute_fib(n - 1) + compute_fib(n - 2);
 }
 
-FibonacciWorker::FibonacciWorker(int worker_id, NativeFibonacciManager *manager,
+FibonacciWorker::FibonacciWorker(int worker_id, IResultSink<FibResult> *sink,
                                   JSContext *js_ctx, uv_loop_t *loop)
-    : worker_id_(worker_id), manager_(manager), js_ctx_(js_ctx) {
+    : worker_id_(worker_id), sink_(sink), js_ctx_(js_ctx) {
     uv_async_init(loop, &doorbell_, on_result_ready);
     uv_unref((uv_handle_t *)&doorbell_);
     doorbell_.data = this;
@@ -68,7 +67,7 @@ void FibonacciWorker::on_result_ready(uv_async_t *handle) {
 
     FibResult r;
     while (self->result_queue_.pop(r)) {
-        self->manager_->on_result(r);
+        self->sink_->on_result(r);
 
         if (--self->in_flight_ == 0)
             uv_unref((uv_handle_t *)handle);

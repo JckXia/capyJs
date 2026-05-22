@@ -1,12 +1,11 @@
 #pragma once
 #include "i_worker.h"
+#include "i_result_sink.h"
 #include "work_queue.h"
 #include "spsc_queue.h"
 #include "quickjs.h"
 #include "uv.h"
 #include <cstdint>
-
-class NativeFibonacciManager;
 
 struct FibJob {
     uint64_t job_id;
@@ -30,7 +29,7 @@ public:
     static constexpr size_t QUEUE_DEPTH        = 64;
     static constexpr size_t RESULT_QUEUE_DEPTH = 64;
 
-    FibonacciWorker(int worker_id, NativeFibonacciManager *manager,
+    FibonacciWorker(int worker_id, IResultSink<FibResult> *sink,
                     JSContext *js_ctx, uv_loop_t *loop);
 
     FibonacciWorker(const FibonacciWorker &) = delete;
@@ -55,6 +54,6 @@ private:
     int         worker_id_;
     int         in_flight_{0}; // main-thread only
 
-    NativeFibonacciManager *manager_;
+    IResultSink<FibResult> *sink_;
     JSContext              *js_ctx_;
 };
