@@ -1,13 +1,13 @@
-// js_worker.js — demonstrates JSWorkerManager.
+// js_worker.js which demonstrates JSWorkerManager.
 //
 // Each worker spins up its own QuickJS runtime (no event loop).
 // The worker_js file must define a global process(inputJson) → JSON string.
-// Data crosses the runtime boundary as JSON strings — the unavoidable tax
+// Data crosses the runtime boundary as JSON strings, the unavoidable tax
 // of keeping two JS engines from sharing a heap.
 
 const mgr = new JSWorkerManager({
     worker_size: 4,
-    worker_js: './examples/worker_process.js',
+    worker_js: './worker_process.js',
 });
 
 let done = 0;
