@@ -224,6 +224,7 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
 
   RequestObject *req = new RequestObject();
   ResponseObject *res = new ResponseObject();
+  res->req = req;
 
   size_t safe_verb_len = std::min(method_len, sizeof(req->verb) - 1);
   size_t safe_uri_len  = std::min(path_len,   sizeof(req->uri)  - 1);

@@ -44,6 +44,7 @@ void ResponseObject::send() {
   ClientState *client_state = (ClientState *)cli->data;
 
   if (client_state->closing == true) {
+    delete this->req;
     return;
   }
   size_t header_len = header_size + 256;
@@ -52,6 +53,8 @@ void ResponseObject::send() {
   uv_write_t *write_handle = &client_state->write_handle;
   write_handle->data = client_state;
 
+  for (auto &[k, v] : headers) { free((void*)k); free((void*)v); }
+  headers.clear();
   delete this->req; // Destroys the linked request object
   if (is_static) {
     uv_buf_t bufs[2] = {uv_buf_init(header_buf, header_len),
