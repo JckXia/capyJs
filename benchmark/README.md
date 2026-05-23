@@ -21,7 +21,7 @@ wrk -t10 -c10000 -d1m http://localhost:3001/   # capy  :3001
 | | Req/sec | Avg Latency | Max Latency |
 |---|---|---|---|
 | Node | 81,440 | 2.95ms | 178.82ms |
-| Capy | 229,558 | 1.01ms | 53.95ms |
+| Capy | 159539.27 | 1.01ms | 53.95ms |
 
 ---
 
