@@ -1,5 +1,6 @@
 #pragma once
 #include "http_message.h"
+#include "conn_guard.h"
 #include "uv.h"
 #include <cstring>
 #include "ws.h"
@@ -36,6 +37,7 @@ struct ClientState {
   char *pending_write_buffer = nullptr; // TODO: Need to rethink this bit
   WebSocket *activeWs = nullptr;
   Server *server = nullptr;
+  ConnGuard *guard = nullptr;
   size_t recv_count = 0;
   int recv_len = 0;
 
