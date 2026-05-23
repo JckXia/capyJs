@@ -8,6 +8,16 @@ A high performance C++ compute engine with a JavaScript scripting layer, built o
 
 JavaScript handles I/O and orchestration. CPU-intensive work runs in native workers on dedicated OS threads. The boundary between the two is a `uv_async_t` doorbell. However, the main event loop never blocks waiting on compute.
 
+## Motivation
+
+This is not meant to be a competitor to Node/Deno/Bun. Code that works on mainline runtimes might not work on CapyJS and vice versa. Rather, this is a research project and a proof of concept, to explore the architecture of a JS runtime where JS is strictly an thin glue layer and heavy lifting is done native side.
+
+## Status
+
+Not production ready. That said, this repo powers [jxia.dev](https://jxia.dev/) running on a Raspberry Pi 5. The server source is [here](https://github.com/JckXia/portfolio/tree/main).     
+    
+
+
 ## Building
 
 Requires CMake 3.21+.
