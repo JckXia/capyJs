@@ -41,9 +41,18 @@ int ResponseObject::build_headers(char *header_buf, size_t header_len,
 }
 
 void ResponseObject::send() {
+  if (!guard->alive) {
+    guard->release();
+    delete this->req;
+    delete this;
+    return;
+  }
   ClientState *client_state = (ClientState *)cli->data;
 
   if (client_state->closing == true) {
+    guard->release();
+    delete this->req;
+    delete this;
     return;
   }
   size_t header_len = header_size + 256;
@@ -52,6 +61,8 @@ void ResponseObject::send() {
   uv_write_t *write_handle = &client_state->write_handle;
   write_handle->data = client_state;
 
+  for (auto &[k, v] : headers) { free((void*)k); free((void*)v); }
+  headers.clear();
   delete this->req; // Destroys the linked request object
   if (is_static) {
     uv_buf_t bufs[2] = {uv_buf_init(header_buf, header_len),
@@ -61,6 +72,7 @@ void ResponseObject::send() {
     if ((rc = uv_write(write_handle, cli, bufs, 2, Server::on_static_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
     }
+    guard->release();
     delete (this);
   } else {
     client_state->pending_write_buffer = (char *)malloc(response_len);
@@ -74,9 +86,11 @@ void ResponseObject::send() {
     int rc;
     if ((rc = uv_write(write_handle, cli, bufs, 2, Server::on_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
+      guard->release();
       delete (this);
       return;
     }
+    guard->release();
     delete (this);
   }
 }
@@ -102,8 +116,15 @@ static void on_abort_write_cb(uv_write_t *req, int status) {
 }
 
 void ResponseObject::abort() {
+  if (!guard->alive) {
+    guard->release();
+    delete this;
+    return;
+  }
   ClientState *client_state = (ClientState *)cli->data;
   if (client_state->closing == true) {
+    guard->release();
+    delete this;
     return;
   }
 
@@ -121,5 +142,6 @@ void ResponseObject::abort() {
     uv_close((uv_handle_t *)&client_state->socket, Server::on_client_closed_cb);
   }
 
+  guard->release();
   delete this;
 }

@@ -1,116 +1,79 @@
 # Capy Benchmarks
 
-Reference comparison against Node.js. These are not a claim that Capy is faster —
-Node is a 15-year-old production runtime. The goal is to validate architectural
-decisions and identify where the design makes a measurable difference.
+Reference comparison against Node.js.
 
-## Setup
-
-```bash
-# Install wrk (macOS)
-brew install wrk
-
-# Build Capy (release, no ASan)
-cmake --preset macos-dev && cmake --build --preset macos-dev --target capy
-
-# Node version used
-node --version
-```
-
-## Scenarios
-
-### 1. io_throughput — plain HTTP baseline
-
-Node's home turf. Both servers return a static `"Hello"` string.
-If Capy is within range, the core I/O path is sound.
-
-```bash
-# Terminal 1
-node benchmark/io_throughput/node_server.js
-
-# Terminal 2
-./build-macos-dev/capy benchmark/io_throughput/capy_server.js
-
-# Terminal 3 — run each for 30s, 12 threads, 400 connections
-wrk -t12 -c400 -d30s http://localhost:3000/   # node
-wrk -t12 -c400 -d30s http://localhost:3001/   # capy
-```
+**Hardware:** MacBook Air, Apple M2, 8GB RAM, macOS Tahoe 26.2
+**Node version:** v24.12.0
+**Capy build:** Release, `-O2`, ASan OFF
+**Tool:** `wrk`
 
 ---
 
-### 2. io_compute — HTTP + JSON per request
+## 1. io_throughput
 
-Realistic API server workload: parse, compute, serialize on every request.
-QuickJS lacks V8's JIT so expect Node to lead here. Gap size is the signal.
+Plain HTTP, static response, no compute, no workers.
 
-```bash
-node benchmark/io_compute/node_server.js
-./build-macos-dev/capy benchmark/io_compute/capy_server.js
-
-wrk -t12 -c400 -d30s http://localhost:3000/compute
-wrk -t12 -c400 -d30s http://localhost:3001/compute
 ```
+wrk -t10 -c10000 -d1m http://localhost:3000/   # node  :3000
+wrk -t10 -c10000 -d1m http://localhost:3001/   # capy  :3001
+```
+
+| | Req/sec | Avg Latency | Max Latency |
+|---|---|---|---|
+| Node | 81,440 | 2.95ms | 178.82ms |
+| Capy | 229,558 | 1.01ms | 53.95ms |
 
 ---
 
-### 3. cpu_io_concurrent — THE KEY BENCHMARK
+## 2. io_compute
 
-5 CPU workers fully saturated. Measure HTTP `/ping` latency while workers run hot.
+HTTP + JSON parse + serialize per request.
 
-**What to look for:** Capy's workers run on dedicated OS threads created with
-`uv_thread_create` — invisible to libuv's internal threadpool. The event loop
-never waits on them. Node's `worker_threads` are also real OS threads, but all
-threads (workers + event loop) compete for the same CPU cores.
-
-P99 latency on `/ping` under saturation is the number that matters.
-
-```bash
-node benchmark/cpu_io_concurrent/node_server.js
-./build-macos-dev/capy benchmark/cpu_io_concurrent/capy_server.js
-
-# Measure ping latency while workers are saturated (they saturate on startup)
-wrk -t4 -c50 -d30s http://localhost:3000/ping   # node
-wrk -t4 -c50 -d30s http://localhost:3001/ping   # capy
 ```
+wrk -t10 -c10000 -d1m http://localhost:3000/compute   # node
+wrk -t10 -c10000 -d1m http://localhost:3001/compute   # capy
+```
+
+| | Req/sec | Avg Latency | Max Latency |
+|---|---|---|---|
+| Node | 71,224 | 3.38ms | 315.80ms |
+| Capy | 86,947 | 2.69ms | 110.48ms |
 
 ---
 
-### 4. memory — RSS footprint under load
+## 3. cpu_io_concurrent
 
-QuickJS vs V8 baseline. Not throughput — just how much RAM the process uses
-at idle and under sustained request load.
+Recursive `fib(35)` dispatched to 5 CPU workers per request.
 
-```bash
-node benchmark/memory/node_server.js &
-NODE_PID=$!
-./build-macos-dev/capy benchmark/memory/capy_server.js &
-CAPY_PID=$!
+Three configurations. Act 1 uses 500 connections, Act 2 uses 50 connections
+(reduced to eliminate queue saturation noise from the native worker numbers).
 
-# Idle footprint
-sleep 2
-echo "node RSS (idle):"; ps -o rss= -p $NODE_PID
-echo "capy RSS (idle):"; ps -o rss= -p $CAPY_PID
-
-# Under load
-wrk -t4 -c100 -d20s http://localhost:3000/ > /dev/null &
-wrk -t4 -c100 -d20s http://localhost:3001/ > /dev/null &
-sleep 10
-echo "node RSS (load):"; ps -o rss= -p $NODE_PID
-echo "capy RSS (load):"; ps -o rss= -p $CAPY_PID
-
-kill $NODE_PID $CAPY_PID
 ```
+# Act 1
+wrk -t5 -c500 -d5m http://localhost:3000/job   # node worker_threads
+wrk -t5 -c500 -d5m http://localhost:3001/job   # capy JSWorkerManager
+
+# Act 2
+wrk -t5 -c50 -d8m http://localhost:3001/job    # capy NativeFibonacciManager
+```
+
+| | Req/sec | Avg Latency | Notes |
+|---|---|---|---|
+| Node worker_threads | 48.22 | 1.02s | V8 JIT, 14354 timeouts |
+| Capy JSWorkerManager | 4.63 | 1.26s | QuickJS, no JIT |
+| Capy NativeFibonacciManager | 156.60 | 323.58ms | Native C++, 50 connections |
+
+Note: socket errors on Act 1 runs are expected. fib(35) under 500 connections
+saturates the worker queue on both runtimes. The req/sec ratio between
+implementations is the signal, not absolute throughput.
 
 ---
 
-## Methodology
+## 4. memory
 
-- **Hardware:** record CPU model, core count, RAM
-- **OS:** macOS / Linux (specify)
-- **Node version:** `node --version`
-- **Capy build:** Release, `-O2`, ASan OFF
-- **Warmup:** 5s warmup before measuring (wrk does this implicitly with `-d`)
-- **Runs:** 3 runs, report median
-- **Tool:** `wrk` for throughput/latency, `ps -o rss=` for memory
+RSS under sustained load, 10 threads, 10,000 connections, ~10 minute run.
 
-Scenarios where Node wins are included intentionally.
+| | RSS |
+|---|---|
+| Node | 201,856 KB |
+| Capy | 2,192 KB |

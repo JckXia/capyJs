@@ -1,5 +1,6 @@
 #pragma once
 #include "client_state.h"
+#include "conn_guard.h"
 #include "uv.h"
 #include <cstddef>
 #include <map>
@@ -18,6 +19,7 @@ struct ResponseObject {
 
   bool is_static = false;
   uv_stream_t *cli;
+  ConnGuard *guard = nullptr;
 
   static int build_headers(char *header_buf, size_t header_len,
                            ResponseObject *res);

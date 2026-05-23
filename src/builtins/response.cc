@@ -2,7 +2,7 @@
 #include "http_message.h"
 #include <cstdlib>
 #include <string.h>
-
+#include <iostream>
 static JSClassDef response_class_def = {.class_name = "Response"};
 JSClassID response_class_id;
 static JSValue response_end(JSContext *ctx, JSValueConst this_val, int argc,
@@ -16,7 +16,7 @@ static JSValue response_end(JSContext *ctx, JSValueConst this_val, int argc,
 
   res->response_buffer = (char *)malloc(len + 1);
   if (res->response_buffer == nullptr) {
-  //  std::cout << "[ERROR] response buffer pool exhausted, dropping connection\n";
+    std::cout << "[ERROR] response buffer pool exhausted, dropping connection\n";
     JS_FreeCString(ctx, body);
     res->abort();
     
@@ -27,7 +27,6 @@ static JSValue response_end(JSContext *ctx, JSValueConst this_val, int argc,
   res->response_len = len;
 
   JS_FreeCString(ctx, body); // Safe to free now
-
   res->send();
   return JS_UNDEFINED;
 }
@@ -40,10 +39,12 @@ static JSValue response_set_header(JSContext *ctx, JSValueConst this_val,
   if (!res)
     return JS_EXCEPTION;
 
-  const char *header_key = strdup(JS_ToCString(ctx, argv[0]));
-  const char *header_val = strdup(JS_ToCString(ctx, argv[1]));
-  res->headers[header_key] = header_val;
+  const char *header_key = JS_ToCString(ctx, argv[0]);
+  const char *header_val = JS_ToCString(ctx, argv[1]);
+  res->headers[strdup(header_key)] = strdup(header_val);
   res->header_size += strlen(header_val);
+  JS_FreeCString(ctx, header_key);
+  JS_FreeCString(ctx, header_val);
   return JS_DupValue(ctx, this_val);
 }
 

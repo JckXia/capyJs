@@ -97,6 +97,13 @@ void Server::on_client_closed_cb(uv_handle_t *handle) {
     client->activeWs = nullptr;
   }
 
+  // Invalidate guard before reclaim — any inflight ResponseObject will see alive=false
+  if (client->guard) {
+    client->guard->alive = false;
+    client->guard->release();
+    client->guard = nullptr;
+  }
+
   uv_timer_stop(&client->idle_timer);
   uv_close((uv_handle_t *)&client->idle_timer, on_idle_timer_closed_cb);
   // ClientState is released in on_idle_timer_closed_cb once the timer handle is fully closed
@@ -224,6 +231,7 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
 
   RequestObject *req = new RequestObject();
   ResponseObject *res = new ResponseObject();
+  res->req = req;
 
   size_t safe_verb_len = std::min(method_len, sizeof(req->verb) - 1);
   size_t safe_uri_len  = std::min(path_len,   sizeof(req->uri)  - 1);
@@ -247,7 +255,10 @@ void Server::process_http_1_request(uv_stream_t *client, ssize_t nread,
     return;
   }
 
-  res->cli = client;
+  res->cli   = client;
+  res->req   = req;
+  res->guard = client_state->guard;
+  res->guard->acquire(); // ResponseObject holds one ref
   ctx->http_ctx->invoke_function(
       *req, *res, req->verb, req->uri); // TODO: Add enums like "INVOKE_SUCCESS",
                                      // "INVOKE_FAILED", "NOT_FOUND"
@@ -368,6 +379,25 @@ void Server::on_peer_connected(uv_stream_t *server_stream, int status) {
 
   init_client_state(client);
   client->server = server;
+
+  ConnGuard *guard = server->pool.acquire_guard();
+  if (guard == nullptr) {
+    std::cerr << "ConnGuard pool exhausted, rejecting connection\n";
+    server->pool.release_client(client);
+    uv_tcp_t *temp_socket = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
+    if (uv_tcp_init(uv_default_loop(), temp_socket) == 0 &&
+        uv_accept(server_stream, (uv_stream_t *)temp_socket) == 0) {
+      uv_close((uv_handle_t *)temp_socket, on_client_closed_emergency);
+    } else {
+      free(temp_socket);
+    }
+    return;
+  }
+  guard->alive     = true;
+  guard->ref_count = 0;
+  guard->pool      = &server->pool.guards;
+  guard->acquire(); // ClientState holds one ref
+  client->guard    = guard;
   init_client_socket(client);
   uv_timer_init(env->loop, &client->idle_timer);
   client->idle_timer.data = client;
