@@ -6,7 +6,9 @@
 
 A high performance C++ compute engine with a JavaScript scripting layer, built on [QuickJS](https://bellard.org/quickjs/) and [libuv](https://libuv.org/).
 
-JavaScript handles I/O and orchestration. CPU-intensive work runs in native workers on dedicated OS threads. The boundary between the two is a `uv_async_t` doorbell. However, the main event loop never blocks waiting on compute.
+JavaScript handles I/O and orchestration. computationally intensive work runs in native workers, using their own managed threading solutions rather than the builtin Libuv threadpool to prevent contentions. 
+
+The boundary between the main event loop and the native workers is a `uv_async_t` doorbell. However, the main event loop never blocks waiting on compute. CapyJS is not opiniated on the threading model of external workers, so long as they are implemented against this contract using `uv_async_t` as the handoff point.
 
 ## Motivation
 
