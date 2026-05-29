@@ -86,33 +86,25 @@ if(CAPY_STATIC)
     target_link_options(capy PRIVATE -static)
 endif()
 # -- Tests ---------------------------------------------
-# add_executable(mem_pool_test
-#     tests/mem_pool_test.cc
-# )
+option(CAPY_BUILD_TESTS "Build test suite" OFF)
 
-# add_executable(mem_pool_perf
-#     tests/mem_pool_perf.cc
-# )
+if(CAPY_BUILD_TESTS)
+    enable_testing()
 
-# add_executable(client_state_test
-#     tests/client_state_test.cc
-#     src/allocator.cc
-# )
+    # mem_pool — existing assert-based suite
+    add_executable(mem_pool_test tests/mem_pool_test.cc)
+    add_test(NAME mem_pool COMMAND mem_pool_test)
 
-# add_executable(http_parser_test
-#     tests/http_parser_test.cc
-# )
+    # spsc_queue — lock-free ring queue
+    add_executable(spsc_queue_test tests/spsc_queue_test.cc)
+    add_test(NAME spsc_queue COMMAND spsc_queue_test)
 
-# add_executable(allocator_test
-#     tests/allocator_test.cc
-#      src/allocator.cc
-# )
+    # work_queue — semaphore-backed SPSC wrapper (needs libuv)
+    add_executable(work_queue_test tests/work_queue_test.cc)
+    target_link_libraries(work_queue_test PRIVATE uv_a)
+    add_test(NAME work_queue COMMAND work_queue_test)
 
-# add_executable(allocator_type_test
-#     tests/allocator_type_hint_test.cc
-#      src/allocator.cc
-# )
-
-# target_link_libraries(allocator_test  uv)
-# target_link_libraries(http_parser_test picohttp)
-# target_link_libraries(client_state_test uv quickjs)
+    # conn_guard — pooled liveness token
+    add_executable(conn_guard_test tests/conn_guard_test.cc)
+    add_test(NAME conn_guard COMMAND conn_guard_test)
+endif()
