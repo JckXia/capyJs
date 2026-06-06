@@ -38,6 +38,13 @@
         "CAPY_ASAN": "ON"
       }
     },
+    {
+      "name": ".base-tests",
+      "hidden": true,
+      "cacheVariables": {
+        "CAPY_BUILD_TESTS": "ON"
+      }
+    },
 
     {
       "name": ".base-cross-arm64",
@@ -137,6 +144,19 @@
       "displayName": "macOS — x86_64 Debug",
       "inherits": [".base-debug", ".base-macos-x86"],
       "binaryDir": "${sourceDir}/build/macos-dev-x86"
+    },
+
+    {
+      "name": "macos-test",
+      "displayName": "macOS — arm64 ASan + Tests",
+      "inherits": [".base-asan", ".base-macos-arm64", ".base-tests"],
+      "binaryDir": "${sourceDir}/build/macos-test"
+    },
+    {
+      "name": "x86-test",
+      "displayName": "x86_64 — ASan + Tests",
+      "inherits": [".base-asan", ".base-tests"],
+      "binaryDir": "${sourceDir}/build/x86-test"
     }
   ],
   "buildPresets": [
@@ -149,6 +169,8 @@
     { "name": "cross-arm64-release","configurePreset": "cross-arm64-release" },
     { "name": "cross-arm64-asan",   "configurePreset": "cross-arm64-asan" },
     { "name": "macos-dev",          "configurePreset": "macos-dev" },
-    { "name": "macos-dev-x86",      "configurePreset": "macos-dev-x86" }
+    { "name": "macos-dev-x86",      "configurePreset": "macos-dev-x86" },
+    { "name": "macos-test",         "configurePreset": "macos-test" },
+    { "name": "x86-test",           "configurePreset": "x86-test" }
   ]
 }
