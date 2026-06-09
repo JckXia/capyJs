@@ -6,24 +6,12 @@
 
 struct FileSystem;
 
-enum FileState {
-    UNLINKED,
-    PENDING,
-    OPEN,
-    READ,
-    CLOSE
-};
-
 struct FileEntry {
     int fd = -1;
     char *buf = nullptr;
     size_t buf_len = 0;
-    // JSValue pending_cb;
-    // JSValue read_cb;
     JSContext *ctx = nullptr;
     FileSystem *owner = nullptr;
-
-    // FileEntry() { pending_cb = JS_UNDEFINED; }
 };
 
 // Idea:
@@ -58,7 +46,5 @@ struct FileOpState {
 };
 
 struct FileSystem {
-    // std::map<std::string, FileEntry *> byPath;
-    // std::map<int, FileEntry *> byFd;
     std::map<int, FileOpState*> fd_state; 
 };
