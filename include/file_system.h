@@ -61,11 +61,4 @@ struct FileSystem {
     // std::map<std::string, FileEntry *> byPath;
     // std::map<int, FileEntry *> byFd;
     std::map<int, FileOpState*> fd_state; 
-
-    // ~FileSystem() {
-    //     for (auto &[path, entry] : byPath) {
-    //         delete[] entry->buf;
-    //         delete entry;
-    //     }
-    // }
 };

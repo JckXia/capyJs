@@ -28,6 +28,12 @@ JSClassID fs_class_id;
   in us constantly overwriting the "fd" field of FieldEntry
 
 */
+struct FsOpPacket {
+  FileOpState* state;
+  uv_fs_t* req;
+  JSValue fs_op_cb;
+};
+
 static void fs_finalizer(JSRuntime *rt, JSValue val) {
   FileSystem *fs = (FileSystem *)JS_GetOpaque(val, fs_class_id);
   if (fs) delete fs;
@@ -44,7 +50,10 @@ static JSValue fs_constructor(JSContext *ctx, JSValueConst new_target,
 }
 
 static void open_file_async_cb(uv_fs_t *req) {
-  FileOpState *file_state = (FileOpState*)req->data;
+ 
+  FsOpPacket* pkt = (FsOpPacket*)req->data;
+  FileOpState *file_state = pkt->state;
+
   JSContext *ctx = file_state->ctx;
 
   JSValue err, fd_val;
@@ -61,19 +70,20 @@ static void open_file_async_cb(uv_fs_t *req) {
   }
 
   JSValue args[] = {err, fd_val};
-  JSValue ret = JS_Call(ctx, file_state->callback, JS_UNDEFINED, 2, args);
+  JSValue ret = JS_Call(ctx, pkt->fs_op_cb, JS_UNDEFINED, 2, args);
   JS_FreeValue(ctx, ret);
   JS_FreeValue(ctx, err);
   JS_FreeValue(ctx, fd_val);
-  JS_FreeValue(ctx, file_state->callback);
-  file_state->callback = JS_UNDEFINED;
+  JS_FreeValue(ctx, pkt->fs_op_cb);
 
   uv_fs_req_cleanup(req);
   free(req);
+  delete pkt;
 }
 
 static void read_file_async_cb(uv_fs_t *req) {
-  FileOpState* fstate = (FileOpState*)req->data;
+  FsOpPacket * pkt = (FsOpPacket*)req->data;
+  FileOpState* fstate = pkt->state;
   JSContext *ctx = fstate->ctx;
 
   JSValue err, data;
@@ -86,15 +96,15 @@ static void read_file_async_cb(uv_fs_t *req) {
   }
 
   JSValue args[] = {err, data};
-  JSValue ret = JS_Call(ctx, fstate->read_callback, JS_UNDEFINED, 2, args);
+  JSValue ret = JS_Call(ctx, pkt->fs_op_cb, JS_UNDEFINED, 2, args);
   JS_FreeValue(ctx, ret);
   JS_FreeValue(ctx, err);
   JS_FreeValue(ctx, data);
-  JS_FreeValue(ctx, fstate->read_callback);
-  fstate->read_callback = JS_UNDEFINED;
+  JS_FreeValue(ctx, pkt->fs_op_cb);
 
   uv_fs_req_cleanup(req);
   free(req);
+  delete pkt;
 }
 
 static void close_file_async_cb(uv_fs_t *req) {
@@ -117,12 +127,18 @@ static JSValue open_file_async(JSContext *ctx, JSValueConst this_val, int argc,
 
 
   FileOpState * unlinked_fs = new FileOpState();
-  unlinked_fs->callback = JS_DupValue(ctx, argv[1]);
   unlinked_fs->ctx = ctx;
   unlinked_fs->owner = fs;
 
+  
   uv_fs_t *req = (uv_fs_t *)malloc(sizeof(uv_fs_t));
-  req->data = unlinked_fs;
+
+  FsOpPacket * pkt = new FsOpPacket();
+  pkt->state = unlinked_fs;
+  pkt->req = req;
+  pkt->fs_op_cb = JS_DupValue(ctx, argv[1]);
+
+  req->data = pkt;
 
   RuntimeContext *env =
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
@@ -157,12 +173,14 @@ static JSValue read_file_async(JSContext *ctx, JSValueConst this_val, int argc,
     entry->buf = new char[buf_len];
     entry->buf_len = (size_t)buf_len;
   }
-
-  entry->read_callback = JS_DupValue(ctx, argv[2]);
-
+  
   uv_fs_t *req = (uv_fs_t *)malloc(sizeof(uv_fs_t));
-  req->data = entry;
+  FsOpPacket * pkt = new FsOpPacket();
+  pkt->fs_op_cb = JS_DupValue(ctx, argv[2]);
+  pkt->state = entry;
+  pkt->req = req;
 
+  req->data = pkt;
   uv_buf_t uvbuf = uv_buf_init(entry->buf, buf_len);
   RuntimeContext *env =
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
