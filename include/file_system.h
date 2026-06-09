@@ -18,12 +18,12 @@ struct FileEntry {
     int fd = -1;
     char *buf = nullptr;
     size_t buf_len = 0;
-    JSValue pending_cb;
-    JSValue read_cb;
+    // JSValue pending_cb;
+    // JSValue read_cb;
     JSContext *ctx = nullptr;
     FileSystem *owner = nullptr;
 
-    FileEntry() { pending_cb = JS_UNDEFINED; }
+    // FileEntry() { pending_cb = JS_UNDEFINED; }
 };
 
 // Idea:
