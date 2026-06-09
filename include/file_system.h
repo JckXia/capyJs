@@ -30,16 +30,11 @@ struct FileOpState {
     int fd = -1;
     char *buf = nullptr;
     size_t buf_len = 0;
-    FileState file_state;
+   
     FileSystem *owner = nullptr;
     JSContext *ctx = nullptr;
-    JSValue callback;
-    JSValue read_callback;
-    FileOpState() {
-        file_state = FileState::UNLINKED;
-        callback = JS_UNDEFINED;
-        read_callback = JS_UNDEFINED;
-    }
+ 
+ 
     ~FileOpState() {
         delete[] this->buf;
     }
