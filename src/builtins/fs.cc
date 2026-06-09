@@ -6,10 +6,28 @@
 #include <sys/stat.h>
 #include "uv.h"
 #include "file_system.h"
+#include <iostream>
 #include "runtime_context.h"
 
 JSClassID fs_class_id;
 
+/**
+  The API we intend to provide:
+    -> fs.open(filePath, (err, fd) => {});
+    -> fs.read(fd, buffLen, (err, data) => {});
+    -> fs.close(fd) 
+  
+  The pitfall to prevent: The callback in open() is NOT 1:1 to file path.
+
+  You can have stuff like
+  fs.open("/tst.data", (err,fd) => { doReadOperationWithData(Fd)})
+  fs.open("/tst.data", (err,fd) => { doWriteOperationWithData(fd)})
+
+  It makes 0 sense to cache these. The problem we were seeing in production resulted
+  in us pinning fd/close in a tight loop. These opens are done against the same file path, resulting 
+  in us constantly overwriting the "fd" field of FieldEntry
+
+*/
 static void fs_finalizer(JSRuntime *rt, JSValue val) {
   FileSystem *fs = (FileSystem *)JS_GetOpaque(val, fs_class_id);
   if (fs) delete fs;
@@ -26,35 +44,37 @@ static JSValue fs_constructor(JSContext *ctx, JSValueConst new_target,
 }
 
 static void open_file_async_cb(uv_fs_t *req) {
-  FileEntry *entry = (FileEntry *)req->data;
-  JSContext *ctx = entry->ctx;
+  FileOpState *file_state = (FileOpState*)req->data;
+  JSContext *ctx = file_state->ctx;
 
   JSValue err, fd_val;
+  int fd;
   if (req->result < 0) {
     err    = JS_NewInt32(ctx, (int)req->result);
     fd_val = JS_UNDEFINED;
   } else {
-    entry->fd = (int)req->result;
-    entry->owner->byFd[entry->fd] = entry;
-    err    = JS_UNDEFINED;
-    fd_val = JS_NewInt64(ctx, req->result);
+    fd =  (int)req->result;
+    err = JS_UNDEFINED;
+    fd_val = JS_NewInt64(ctx, fd);
+    file_state->fd = fd;
+    file_state->owner->fd_state[fd] = file_state;
   }
 
   JSValue args[] = {err, fd_val};
-  JSValue ret = JS_Call(ctx, entry->pending_cb, JS_UNDEFINED, 2, args);
+  JSValue ret = JS_Call(ctx, file_state->callback, JS_UNDEFINED, 2, args);
   JS_FreeValue(ctx, ret);
   JS_FreeValue(ctx, err);
   JS_FreeValue(ctx, fd_val);
-  JS_FreeValue(ctx, entry->pending_cb);
-  entry->pending_cb = JS_UNDEFINED;
+  JS_FreeValue(ctx, file_state->callback);
+  file_state->callback = JS_UNDEFINED;
 
   uv_fs_req_cleanup(req);
   free(req);
 }
 
 static void read_file_async_cb(uv_fs_t *req) {
-  FileEntry *entry = (FileEntry *)req->data;
-  JSContext *ctx = entry->ctx;
+  FileOpState* fstate = (FileOpState*)req->data;
+  JSContext *ctx = fstate->ctx;
 
   JSValue err, data;
   if (req->result < 0) {
@@ -62,27 +82,28 @@ static void read_file_async_cb(uv_fs_t *req) {
     data = JS_UNDEFINED;
   } else {
     err  = JS_UNDEFINED;
-    data = JS_NewStringLen(ctx, entry->buf, (size_t)req->result);
+    data = JS_NewStringLen(ctx, fstate->buf, (size_t)req->result);
   }
 
   JSValue args[] = {err, data};
-  JSValue ret = JS_Call(ctx, entry->read_cb, JS_UNDEFINED, 2, args);
+  JSValue ret = JS_Call(ctx, fstate->read_callback, JS_UNDEFINED, 2, args);
   JS_FreeValue(ctx, ret);
   JS_FreeValue(ctx, err);
   JS_FreeValue(ctx, data);
-  JS_FreeValue(ctx, entry->read_cb);
-  entry->read_cb = JS_UNDEFINED;
+  JS_FreeValue(ctx, fstate->read_callback);
+  fstate->read_callback = JS_UNDEFINED;
 
   uv_fs_req_cleanup(req);
   free(req);
 }
 
 static void close_file_async_cb(uv_fs_t *req) {
-  FileEntry *entry = (FileEntry *)req->data;
-  entry->owner->byFd.erase(entry->fd);
+  FileOpState *entry = (FileOpState *)req->data;
+  entry->owner->fd_state.erase(entry->fd);
   entry->fd = -1;
   uv_fs_req_cleanup(req);
   free(req);
+  delete entry;
 }
 
 static JSValue open_file_async(JSContext *ctx, JSValueConst this_val, int argc,
@@ -92,23 +113,16 @@ static JSValue open_file_async(JSContext *ctx, JSValueConst this_val, int argc,
 
   const char *path = JS_ToCString(ctx, argv[0]);
   std::string key(path);
-  JS_FreeCString(ctx, path);
+  JS_FreeCString(ctx, path);                                
 
-  auto it = fs->byPath.find(key);
-  FileEntry *entry;
-  if (it == fs->byPath.end()) {
-    entry = new FileEntry();
-    entry->ctx = ctx;
-    entry->owner = fs;
-    fs->byPath[key] = entry;
-  } else {
-    entry = it->second;
-  }
 
-  entry->pending_cb = JS_DupValue(ctx, argv[1]);
+  FileOpState * unlinked_fs = new FileOpState();
+  unlinked_fs->callback = JS_DupValue(ctx, argv[1]);
+  unlinked_fs->ctx = ctx;
+  unlinked_fs->owner = fs;
 
   uv_fs_t *req = (uv_fs_t *)malloc(sizeof(uv_fs_t));
-  req->data = entry;
+  req->data = unlinked_fs;
 
   RuntimeContext *env =
       (RuntimeContext *)JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
@@ -127,10 +141,16 @@ static JSValue read_file_async(JSContext *ctx, JSValueConst this_val, int argc,
   int buf_len;
   JS_ToInt32(ctx, &buf_len, argv[1]);
 
-  auto it = fs->byFd.find((int)fd);
-  if (it == fs->byFd.end()) return JS_UNDEFINED;
+  //FileOpState * fstate = fs->fd_state[fd]
+  auto it = fs->fd_state.find((int)fd);
 
-  FileEntry *entry = it->second;
+  if (it == fs->fd_state.end()){
+    // TODO: Move couts to an LOGGER class
+    std::cerr<<"[ERR] The fd in question "<<fd<< " is not known to the file system" << std::endl; 
+    return JS_UNDEFINED;
+  }
+
+  FileOpState* entry = it->second;
 
   if (entry->buf == nullptr || entry->buf_len != (size_t)buf_len) {
     delete[] entry->buf;
@@ -138,7 +158,7 @@ static JSValue read_file_async(JSContext *ctx, JSValueConst this_val, int argc,
     entry->buf_len = (size_t)buf_len;
   }
 
-  entry->read_cb = JS_DupValue(ctx, argv[2]);
+  entry->read_callback = JS_DupValue(ctx, argv[2]);
 
   uv_fs_t *req = (uv_fs_t *)malloc(sizeof(uv_fs_t));
   req->data = entry;
@@ -158,10 +178,10 @@ static JSValue close_file_async(JSContext *ctx, JSValueConst this_val,
   int64_t fd;
   JS_ToInt64(ctx, &fd, argv[0]);
 
-  auto it = fs->byFd.find((int)fd);
-  if (it == fs->byFd.end()) return JS_UNDEFINED;
+  auto it = fs->fd_state.find((int)fd);
+  if (it == fs->fd_state.end()) return JS_UNDEFINED;
 
-  FileEntry *entry = it->second;
+  FileOpState *entry = it->second;
 
   uv_fs_t *req = (uv_fs_t *)malloc(sizeof(uv_fs_t));
   req->data = entry;
