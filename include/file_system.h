@@ -10,22 +10,27 @@ struct FileEntry {
     int fd = -1;
     char *buf = nullptr;
     size_t buf_len = 0;
-    JSValue pending_cb;
-    JSValue read_cb;
     JSContext *ctx = nullptr;
     FileSystem *owner = nullptr;
+};
 
-    FileEntry() { pending_cb = JS_UNDEFINED; }
+// Idea:
+//  -> FileOpState is fairly "static". It just tracks the fd across fs.* calls
+//  -> It does not track the callbacks. Those are created/free'd on an per-call basis. See fs.cc
+struct FileOpState {
+    int fd = -1;
+    char *buf = nullptr;
+    size_t buf_len = 0;
+   
+    FileSystem *owner = nullptr;
+    JSContext *ctx = nullptr;
+ 
+ 
+    ~FileOpState() {
+        delete[] this->buf;
+    }
 };
 
 struct FileSystem {
-    std::map<std::string, FileEntry *> byPath;
-    std::map<int, FileEntry *> byFd;
-
-    ~FileSystem() {
-        for (auto &[path, entry] : byPath) {
-            delete[] entry->buf;
-            delete entry;
-        }
-    }
+    std::map<int, FileOpState*> fd_state; 
 };
