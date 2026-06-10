@@ -1,4 +1,5 @@
 #include "builtins/builtins.h"
+#include "builtins/inference_js.h"
 
 void setup_all_builtins(JSContext *ctx) {
   setup_console_class(ctx);
@@ -13,4 +14,5 @@ void setup_all_builtins(JSContext *ctx) {
   setup_web_socket_class(ctx);
   setup_fibonacci_class(ctx);
   setup_js_worker_class(ctx);
+  setup_inference_engine_class(ctx);
 }
