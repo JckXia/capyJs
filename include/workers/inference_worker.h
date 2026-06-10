@@ -40,6 +40,7 @@ public:
     static constexpr int    TOKEN_GEN_MAX      = 512;
 
     InferenceWorker(int worker_id, int core_start, int core_count,
+                    int n_ctx, int n_batch,
                     NativeInferenceManager *manager,
                     JSContext *js_ctx, uv_loop_t *loop);
 
@@ -73,6 +74,8 @@ private:
     int         worker_id_;
     int         core_start_;
     int         core_count_;
+    int         n_ctx_;
+    int         n_batch_;
     int         in_flight_{0}; // main-thread only; tracks jobs (not tokens)
 
     std::map<std::string, llama_context *> ctxs_;

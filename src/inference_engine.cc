@@ -7,9 +7,11 @@ NativeInferenceManager::NativeInferenceManager(JSContext *js_ctx, uv_loop_t *loo
     llama_backend_init();
 }
 
-bool NativeInferenceManager::add_model(const char *model_class, const char *path) {
+bool NativeInferenceManager::add_model(const char *model_class, const char *path,
+                                        bool use_mlock) {
     llama_model_params mp = llama_model_default_params();
     mp.n_gpu_layers = 0;
+    mp.use_mlock    = use_mlock;
 
     llama_model *model = llama_model_load_from_file(path, mp);
     if (!model) {
@@ -23,7 +25,9 @@ bool NativeInferenceManager::add_model(const char *model_class, const char *path
     return true;
 }
 
-void NativeInferenceManager::spawn_workers(int count) {
+void NativeInferenceManager::spawn_workers(int count, int n_ctx, int n_batch) {
+    if (n_batch <= 0) n_batch = n_ctx; // default: match context window
+
     int total_cores = (int)sysconf(_SC_NPROCESSORS_ONLN) - 1;
     if (total_cores < 1) total_cores = 1;
     int cores_each = total_cores / count;
@@ -33,7 +37,8 @@ void NativeInferenceManager::spawn_workers(int count) {
     int core_cursor = 1;
     for (int i = 0; i < count; i++) {
         workers_.push_back(
-            new InferenceWorker(i, core_cursor, cores_each, this, js_ctx_, loop_));
+            new InferenceWorker(i, core_cursor, cores_each, n_ctx, n_batch,
+                                this, js_ctx_, loop_));
         core_cursor += cores_each;
     }
 }

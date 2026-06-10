@@ -15,10 +15,10 @@ public:
     NativeInferenceManager &operator=(const NativeInferenceManager &) = delete;
 
     // Load model weights under model_class. Call before spawn_workers.
-    bool add_model(const char *model_class, const char *path);
+    bool add_model(const char *model_class, const char *path, bool use_mlock = false);
 
     // Spin up count workers, dividing (nprocs-1) cores evenly among them.
-    void spawn_workers(int count);
+    void spawn_workers(int count, int n_ctx = 2048, int n_batch = 0);
 
     // Workers call this (read-only after spawn_workers — no mutex needed).
     llama_model *get_model(const char *model_class);

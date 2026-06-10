@@ -8,10 +8,11 @@
 #include <unordered_map>
 
 InferenceWorker::InferenceWorker(int worker_id, int core_start, int core_count,
+                                  int n_ctx, int n_batch,
                                   NativeInferenceManager *manager,
                                   JSContext *js_ctx, uv_loop_t *loop)
     : worker_id_(worker_id), core_start_(core_start), core_count_(core_count),
-      manager_(manager), js_ctx_(js_ctx) {
+      n_ctx_(n_ctx), n_batch_(n_batch), manager_(manager), js_ctx_(js_ctx) {
     uv_async_init(loop, &doorbell_, on_result_ready);
     uv_unref((uv_handle_t *)&doorbell_);
     doorbell_.data = this;
@@ -94,9 +95,9 @@ llama_context *InferenceWorker::get_or_create_ctx(const char *model_class,
     }
 
     llama_context_params cp = llama_context_default_params();
-    cp.n_ctx         = 2048;
-    cp.n_batch       = 512;
-    cp.n_threads     = core_count_;
+    cp.n_ctx           = n_ctx_;
+    cp.n_batch         = n_batch_;
+    cp.n_threads       = core_count_;
     cp.n_threads_batch = core_count_;
 
     llama_context *ctx = llama_init_from_model(model, cp);

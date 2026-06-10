@@ -26,6 +26,21 @@ static JSValue inf_ctor(JSContext *ctx, JSValueConst new_target,
 
     auto *mgr = new NativeInferenceManager(ctx, env->loop);
 
+    bool use_mlock = false;
+    JSValue mlv = JS_GetPropertyStr(ctx, argv[0], "mlock");
+    if (JS_IsBool(mlv)) use_mlock = (bool)JS_ToBool(ctx, mlv);
+    JS_FreeValue(ctx, mlv);
+
+    int n_ctx = 2048;
+    JSValue nctxv = JS_GetPropertyStr(ctx, argv[0], "n_ctx");
+    if (JS_IsNumber(nctxv)) { int v; if (JS_ToInt32(ctx, &v, nctxv) == 0 && v > 0) n_ctx = v; }
+    JS_FreeValue(ctx, nctxv);
+
+    int n_batch = 0; // 0 = default to n_ctx inside spawn_workers
+    JSValue nbv = JS_GetPropertyStr(ctx, argv[0], "n_batch");
+    if (JS_IsNumber(nbv)) { int v; if (JS_ToInt32(ctx, &v, nbv) == 0 && v > 0) n_batch = v; }
+    JS_FreeValue(ctx, nbv);
+
     JSValue models = JS_GetPropertyStr(ctx, argv[0], "models");
     if (JS_IsArray(ctx, models)) {
         JSValue len_val = JS_GetPropertyStr(ctx, models, "length");
@@ -40,7 +55,7 @@ static JSValue inf_ctor(JSContext *ctx, JSValueConst new_target,
 
             const char *cls  = JS_ToCString(ctx, cls_val);
             const char *path = JS_ToCString(ctx, path_val);
-            if (cls && path) mgr->add_model(cls, path);
+            if (cls && path) mgr->add_model(cls, path, use_mlock);
 
             JS_FreeCString(ctx, cls);
             JS_FreeCString(ctx, path);
@@ -60,7 +75,7 @@ static JSValue inf_ctor(JSContext *ctx, JSValueConst new_target,
     }
     JS_FreeValue(ctx, wv);
 
-    mgr->spawn_workers(worker_count);
+    mgr->spawn_workers(worker_count, n_ctx, n_batch);
 
     JSValue obj = JS_NewObjectClass(ctx, inf_class_id);
     JS_SetOpaque(obj, mgr);
