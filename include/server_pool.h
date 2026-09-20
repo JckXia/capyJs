@@ -25,6 +25,7 @@ struct ServerPool {
     ReadBuffer   *acquire_read_buffer()              { return read_buffers.acquire(); }
     void          release_read_buffer(ReadBuffer *rb){ read_buffers.release(rb); }
     ConnGuard    *acquire_guard()                    { return guards.acquire(); }
+    void          release_guard(ConnGuard* cn) { return guards.release(cn); } 
 
     void verify_no_leaks() const {
         clients.verify_no_leaks();
