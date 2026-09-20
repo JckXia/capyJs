@@ -61,20 +61,23 @@ void ResponseObject::send() {
   uv_write_t *write_handle = &client_state->write_handle;
   write_handle->data = client_state;
 
-
   delete this->req; // Destroys the linked request object
   if (is_static) {
     uv_buf_t bufs[2] = {uv_buf_init(header_buf, header_len),
                         uv_buf_init(response_buffer, response_len)};
 
     int rc;
-    if ((rc = uv_write(write_handle, cli, bufs, 2, Server::on_static_write_cb)) < 0) {
+    if ((rc = uv_write(write_handle, cli, bufs, 2,
+                       Server::on_static_write_cb)) < 0) {
       std::cout << "Write to socket failed! " << uv_strerror(rc) << std::endl;
     }
     guard->release();
     delete (this);
   } else {
-    for (auto &[k, v] : headers) { free((void*)k); free((void*)v); }
+    for (auto &[k, v] : headers) {
+      free((void *)k);
+      free((void *)v);
+    }
     headers.clear();
     client_state->pending_write_buffer = (char *)malloc(response_len);
 
@@ -96,7 +99,7 @@ void ResponseObject::send() {
   }
 }
 
-void ResponseObject::on_shutdown_cb(uv_shutdown_t* req, int status) {
+void ResponseObject::on_shutdown_cb(uv_shutdown_t *req, int status) {
   ClientState *client_state = (ClientState *)req->data;
   client_state->write_in_flight = false;
   uv_read_start((uv_stream_t *)&client_state->socket,
@@ -129,11 +132,10 @@ void ResponseObject::abort() {
     return;
   }
 
-  static const char resp[] =
-    "HTTP/1.1 503 Service Unavailable\r\n"
-    "Connection: close\r\n"
-    "Content-Length: 0\r\n"
-    "\r\n";
+  static const char resp[] = "HTTP/1.1 503 Service Unavailable\r\n"
+                             "Connection: close\r\n"
+                             "Content-Length: 0\r\n"
+                             "\r\n";
   uv_write_t *write_handle = &client_state->write_handle;
   write_handle->data = client_state;
   uv_buf_t buf = uv_buf_init(const_cast<char *>(resp), sizeof(resp) - 1);
@@ -145,4 +147,23 @@ void ResponseObject::abort() {
 
   guard->release();
   delete this;
+}
+
+void ResponseObject::resp_with_404(ResponseObject &res) {
+  // std::cout << "[404] " << req.verb << " " << req.uri << "\n";
+  static const char response[] = "HTTP/1.1 404 Not Found\r\n"
+                                 "Content-Type: text/plain\r\n"
+                                 "Content-Length: 9\r\n"
+                                 "Connection: keep-alive\r\n"
+                                 "\r\n"
+                                 "Not Found";
+  ClientState *client_state = (ClientState *)res.cli->data;
+  uv_buf_t buf =
+      uv_buf_init(const_cast<char *>(response), sizeof(response) - 1);
+  client_state->write_handle.data = client_state;
+  uv_write(&client_state->write_handle, res.cli, &buf, 1,
+           Server::on_static_write_cb);
+  res.guard->release();
+
+  delete &res;
 }

@@ -86,6 +86,7 @@ add_executable(capy
  src/builtins/fs.cc
  src/http_message.cc
  src/ws.cc
+ src/http_context.cc
  src/builtins/builtins.cc
  src/builtins/console.cc
  src/builtins/request.cc
