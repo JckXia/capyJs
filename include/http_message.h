@@ -24,7 +24,9 @@ struct ResponseObject {
   static int build_headers(char *header_buf, size_t header_len,
                            ResponseObject *res);
 
-  static void on_shutdown_cb(uv_shutdown_t*req, int status);
+  static void on_shutdown_cb(uv_shutdown_t *req, int status);
+
+  static void resp_with_404(ResponseObject &res);
   void send();
   void abort();
 };
